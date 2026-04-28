@@ -1,5 +1,8 @@
+using System;
+using System.IO;
 using FBParser;
 using FBParserTests.Models;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FBParserTests;
 
@@ -87,12 +90,13 @@ public sealed class GNameHandlerTests
     public void SaveAndLoadGNameList_RoundTripsLearnedData()
     {
         var fakeFileSystem = new FakeFileSystem();
-        var writer = new GNameHandler(fakeFileSystem, fakeFileSystem, fakeFileSystem, fakeFileSystem.CreateStreamWriter);
+        Func<string, StreamWriter> streamWriterFactory = path => fakeFileSystem.CreateStreamWriter(path);
+        var writer = new GNameHandler(fakeFileSystem, fakeFileSystem, fakeFileSystem, streamWriterFactory);
         writer.Init();
         writer.LearnSexOfGivnName("Peter", 'M');
         writer.SaveGNameList("ROOT:\\names.txt");
 
-        var reader = new GNameHandler(fakeFileSystem, fakeFileSystem, fakeFileSystem, fakeFileSystem.CreateStreamWriter);
+        var reader = new GNameHandler(fakeFileSystem, fakeFileSystem, fakeFileSystem, path => new StreamWriter(fakeFileSystem.CreateStreamWriter(path).BaseStream));
         reader.Init();
         reader.LoadGNameList("ROOT:\\names.txt");
 

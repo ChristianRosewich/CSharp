@@ -166,6 +166,9 @@
     <File Path="../CSharpBible/Libraries/Libraries.props" />
     <File Path="../CSharpBible/Libraries/Libraries_net.props" />
     <Project Path="../CSharpBible/Libraries/BaseLib/BaseLib.csproj" />
+    <Project Path="../CSharpBible/Libraries/BaseLibTests/BaseLibTests.csproj">
+      <Platform Solution="*|x64" Project="x64" />
+    </Project>
     <Project Path="../CSharpBible/Libraries/CommonDialogs/CommonDialogs.csproj">
       <Platform Solution="*|x86" Project="x86" />
     </Project>

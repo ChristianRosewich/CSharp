@@ -1,6 +1,10 @@
+using System;
+using FBParser.Analysis;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Linq;
 using static FBParser.PascalCompat;
+using System.Collections;
 
 namespace FBParser;
 
@@ -143,6 +147,7 @@ public sealed class FBEntryParser : ParserBase, IDisposable
     private static readonly string[] CArtikelB = [CsArtikelB1, CsArtikelB2, CsArtikelB3];
     private static readonly string[] CLedigKn = [$"{CsLedig}er", $"{CsLedig}e", CsLedigAbb, CsLedig + "."];
     private static readonly string[] CArtikelU = [CsArtikelU2, CsArtikelU1];
+    private static readonly string[] CDeathEntries = [CsDeathEntr2, CsDeathEntr];
 
     private string _defaultPlace = string.Empty;
     private string _lastErr = string.Empty;
@@ -150,6 +155,12 @@ public sealed class FBEntryParser : ParserBase, IDisposable
     private int _mode;
     private string[] _umlauts;
     private string[] _akkaTitel;
+    private readonly IGenealogicalEventEmitter _eventEmitter;
+    private readonly IGenealogicalEntryAnalyzer _entryAnalyzer;
+    private readonly IGenealogicalFactHandler _factHandler;
+    private readonly IGenealogicalPersonNameHandler _personNameHandler;
+    private readonly IGenealogicalNameTokenBuilder _nameTokenBuilder;
+    private readonly IGenealogicalGcHelper _gcHelper;
     private bool _disposed;
 
     /// <summary>
@@ -162,6 +173,12 @@ public sealed class FBEntryParser : ParserBase, IDisposable
         GNameHandler.OnError = GNameError;
         _umlauts = CUmLauts;
         _akkaTitel = CAkkaTitle;
+        _eventEmitter = CreateEventEmitter();
+        _entryAnalyzer = CreateEntryAnalyzer();
+        _factHandler = CreateFactHandler();
+        _personNameHandler = CreatePersonNameHandler();
+        _nameTokenBuilder = CreateNameTokenBuilder();
+        _gcHelper = CreateGcHelper();
     }
 
     /// <summary>
@@ -381,7 +398,9 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                     }
                     break;
                 case 1:
-                    if (In(CharAt(text, localOffset), WhiteSpaceChars.Concat([':'])))
+                    var localGcMarriageWithoutSeparator = TestFor(text, localOffset, CsMarriageGc) && localSubstring.Length > 0 && In(localSubstring[^1], Ziffern);
+                    if (In(CharAt(text, localOffset), WhiteSpaceChars.Concat([':']))
+                        || localGcMarriageWithoutSeparator)
                     {
                         localMode = 2;
                         localPp = LastIndexOfAny(localSubstring, "0123456789ab".ToCharArray());
@@ -403,6 +422,11 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                             localMainFamRef = localSubstring;
                             _mainRef = localMainFamRef;
                         }
+
+                        if (localGcMarriageWithoutSeparator)
+                        {
+                            localOffset--;
+                        }
                     }
                     else
                     {
@@ -411,7 +435,15 @@ public sealed class FBEntryParser : ParserBase, IDisposable
 
                     break;
                 case 2:
-                    if (localOffset > 2
+                    if (TestFor(text, localOffset, CsMarriageGc))
+                    {
+                        localSubstring = string.Empty;
+                        localMode = 3;
+                        localFamName = string.Empty;
+                        localPersonType = 'U';
+                        localOffset--;
+                    }
+                    else if (localOffset > 2
                         && CharAt(text, localOffset - 1) == ' '
                         && In(CharAt(text, localOffset - 2), Ziffern)
                         && !TestFor(text, localOffset, CsMarriageGc)
@@ -486,7 +518,7 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                             SetFamilyType(localMainFamRef, localFamType, localFamCEntry);
                             localSubstring = string.Empty;
                         }
-                        else if (TestFor(localSubstring, 1, [CsDeathEntr, CsDeathEntr2]))
+                        else if (TestFor(localSubstring, 1, CDeathEntries))
                         {
                             localMode = 20;
                             localEntryType = ParserEventType.evt_Death;
@@ -713,6 +745,139 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                     }
 
                     break;
+                case 9:
+                    if (In(CharAt(text, localOffset), Ziffern))
+                    {
+                        localZiffCount++;
+                    }
+                    else
+                    {
+                        if (localZiffCount > 0)
+                        {
+                            localLastZiffCount = localZiffCount;
+                        }
+
+                        localZiffCount = 0;
+                    }
+
+                    if (localSubstring == string.Empty && localFirstEntry)
+                    {
+                        localAka = string.Empty;
+                        localLastZiffCount = 0;
+                    }
+
+                    if (localFirstEntry && BuildName(text, ref localOffset, ref localSubstring, ref localData, ref localCharCount, ref localAka, ref localAddEvent))
+                    {
+                        localPersonGName = localSubstring.Trim();
+                        localPersonName = localSubstring.Trim() + " " + localFamName;
+                        localPersonSex = GuessSexOfGivnName(localSubstring.Trim());
+
+                        if (CharAt(text, localOffset) == '<')
+                        {
+                            localRetMode = localMode;
+                            localMode = 50;
+                            localChRef = string.Empty;
+                            localPos = localOffset + 1;
+                            localPersonSex = GuessSexOfGivnName(localPersonGName);
+                            if (!TestFor(text, localOffset + 1, ["vgl", "s.a"]))
+                            {
+                                while (localPos <= text.Length && (In(CharAt(text, localPos), Ziffern) || CharAt(text, localPos) is 'a' or 'b'))
+                                {
+                                    localChRef += CharAt(text, localPos);
+                                    localPos++;
+                                }
+
+                                if (!TestReferenz(localChRef))
+                                {
+                                    localIndId = "I" + localMainFamRef + "C" + localChildCount;
+                                }
+                                else if (localPersonSex is 'M' or 'F')
+                                {
+                                    localIndId = "I" + localChRef + localPersonSex;
+                                }
+                                else
+                                {
+                                    localIndId = "I" + localChRef + "_";
+                                }
+                            }
+                            else
+                            {
+                                localIndId = "I" + localMainFamRef + "C" + localChildCount;
+                            }
+                        }
+                        else
+                        {
+                            localIndId = "I" + localMainFamRef + "C" + localChildCount;
+                        }
+
+                        SetIndiName(localIndId, 0, localPersonName);
+                        SetFamilyMember(localMainFamRef, localIndId, 2 + localChildCount);
+                        if (localPersonSex is 'M' or 'F')
+                        {
+                            SetIndiData(localIndId, ParserEventType.evt_Sex, localPersonSex.ToString());
+                        }
+
+                        if (localAka != string.Empty)
+                        {
+                            SetIndiName(localIndId, 3, localAka);
+                        }
+
+                        localAdditional = string.Empty;
+                        localChildCount++;
+                        localSubstring = string.Empty;
+                        if (In(CharAt(text, localOffset), Ziffern))
+                        {
+                            localSubstring = localDefaultBirthPlace != string.Empty
+                                ? CsBirth + " " + localDefaultBirthPlace + " " + CharAt(text, localOffset)
+                                : CsBirth + " " + CharAt(text, localOffset);
+                        }
+                        else if (!WhiteSpaceChars.Concat(SatzZeichen).Contains(CharAt(text, localOffset)))
+                        {
+                            localOffset--;
+                        }
+
+                        localFirstEntry = false;
+                    }
+                    else if (!localFirstEntry && BuildData(localIndId, text, ref localOffset, ref localSubstring, ref localData, localMainFamRef, localLastZiffCount, ref localFamDatFlag, ref localEntryEndFlag, ref localEntryType))
+                    {
+                        localEntryType = HandleNonPersonEntry(localSubstring, localIndId);
+                        if (localData != string.Empty)
+                        {
+                            SetIndiData(localIndId, localEntryType, localData);
+                            localData = string.Empty;
+                        }
+
+                        localSubstring = string.Empty;
+                        localLastZiffCount = 0;
+                    }
+
+                    if (CharAt(text, localOffset) == '<')
+                    {
+                        localRetMode = localMode;
+                        localMode = 50;
+                    }
+
+                    if (CharAt(text, localOffset) == '-' && localOffset > 1 && WhiteSpaceChars.Contains(CharAt(text, localOffset - 1)))
+                    {
+                        if (localData != string.Empty)
+                        {
+                            SetIndiData(localIndId, ParserEventType.evt_FreeFact, localData);
+                            localData = string.Empty;
+                        }
+
+                        if (!localEntryEndFlag)
+                        {
+                            Error(this, "Child (" + (localChildCount - 1) + ") entry not ended with .");
+                        }
+
+                        localSubstring = string.Empty;
+                        localAdditional = string.Empty;
+                        localAka = string.Empty;
+                        localFirstEntry = true;
+                        localEntryEndFlag = false;
+                    }
+
+                    break;
                 case 10:
                     if (In(CharAt(text, localOffset), Ziffern.Concat(['.', '/'])))
                     {
@@ -748,7 +913,7 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                             {
                                 SetFamilyPlace(localMainFamRef, ParserEventType.evt_Marriage, localPlace);
                             }
-                            else
+                            else if (CharAt(text, localOffset) != ':')
                             {
                                 localMode = 11;
                             }
@@ -1062,6 +1227,85 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                     localFirstEntry = true;
                     localMode = 9;
                     break;
+                case 20:
+                    if (In(CharAt(text, localOffset), Ziffern.Concat(['.'])))
+                    {
+                        localSubstring += CharAt(text, localOffset);
+                    }
+                    else
+                    {
+                        if (localSubstring.Length > 2)
+                        {
+                            localEventDate = localSubstring;
+                            localSubstring = string.Empty;
+                            localPlace = _defaultPlace;
+                            localMode = 11;
+                        }
+
+                        if (CharAt(text, localOffset) == ':')
+                        {
+                            localPlace = _defaultPlace;
+                            localMode = 5;
+                        }
+                    }
+
+                    break;
+                case 25:
+                    if (In(CharAt(text, localOffset), Ziffern.Concat(['.'])))
+                    {
+                        localSubstring += CharAt(text, localOffset);
+                    }
+                    else
+                    {
+                        if (localSubstring.Length > 2)
+                        {
+                            localEventDate = localSubstring;
+                            localSubstring = string.Empty;
+                            localPlace = _defaultPlace;
+                            localMode = 11;
+                        }
+
+                        if (CharAt(text, localOffset) == ':')
+                        {
+                            localPlace = _defaultPlace;
+                            localMode = 5;
+                        }
+                    }
+
+                    break;
+                case 30:
+                    if (In(CharAt(text, localOffset), Ziffern.Concat(['.'])))
+                    {
+                        localSubstring += CharAt(text, localOffset);
+                    }
+                    else
+                    {
+                        if (localSubstring.Length > 2)
+                        {
+                            localEventDate = localSubstring;
+                            localSubstring = string.Empty;
+                            localEntryType = ParserEventType.evt_Partner;
+                            localPlace = string.Empty;
+                            localMode = 11;
+                        }
+
+                        if (CharAt(text, localOffset) == ':')
+                        {
+                            localMode = 5;
+                            localEntryType = ParserEventType.evt_Partner;
+                            if (localEventDate == string.Empty)
+                            {
+                                localEventDate = ScanForEvDate(text, localOffset);
+                            }
+
+                            if (localEventDate != string.Empty)
+                            {
+                                SetFamilyDate(localMainFamRef, localEntryType, localEventDate);
+                            }
+                        }
+                    }
+
+                    break;
                 case 40:
                     if (CharAt(text, localOffset) == ':')
                     {
@@ -1313,17 +1557,17 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                         localAka = string.Empty;
                     }
 
-                    if (localFirstEntry && TestFor(text, localOffset, [CsDeathEntr2, CsDeathEntr], out localFound))
+                    if (localFirstEntry && TestFor(text, localOffset, CDeathEntries, out localFound))
                     {
-                        localSubstring += Copy(text, localOffset, localFound * 2 + 1);
-                        localOffset += localFound * 2;
+                        localSubstring += Copy(text, localOffset, CDeathEntries[localFound].Length );
+                        localOffset += CDeathEntries[localFound].Length;
                     }
                     else if (localFirstEntry && BuildName(text, ref localOffset, ref localSubstring, ref localData, ref localCharCount, ref localAka, ref localAddEvent))
                     {
                         localPersonName = localSubstring.Trim();
-                        if (TestFor(localPersonName, 1, [CsDeathEntr2, CsDeathEntr], out localFound))
+                        if (TestFor(localPersonName, 1, CDeathEntries , out localFound))
                         {
-                            localPersonName = Copy(localPersonName, CsDeathEntr2.Length + localFound * 2 + 1, 200).Trim();
+                            localPersonName = Copy(localPersonName, CDeathEntries[localFound].Length + 1, 200).Trim();
                             if (localPersonName.StartsWith(CsProtectSpace, StringComparison.Ordinal))
                             {
                                 localPersonName = Copy(localPersonName, CsProtectSpace.Length + 1, 200).Trim();
@@ -1444,10 +1688,10 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                             localSubstring = localPersonName[localPos..];
                             localPersonName = localPersonName[..localPos].Trim();
                         }
-
-                        if (TestFor(localPersonName, 1, [CsDeathEntr2, CsDeathEntr], out localFound))
+                       
+                        if (TestFor(localPersonName, 1, CDeathEntries, out localFound))
                         {
-                            localPersonName = Copy(localPersonName, CsDeathEntr2.Length + localFound * 2 + 1, 200).Trim();
+                            localPersonName = Copy(localPersonName, CDeathEntries[localFound].Length + 1, 200).Trim();
                             if (localPersonName.StartsWith(CsProtectSpace, StringComparison.Ordinal))
                             {
                                 localPersonName = Copy(localPersonName, CsProtectSpace.Length + 1, 200).Trim();
@@ -1567,7 +1811,7 @@ public sealed class FBEntryParser : ParserBase, IDisposable
                         {
                             if (localEntryType == ParserEventType.evt_ID)
                             {
-                                OnIndiRef?.Invoke(this, localSubstring, localIndId, (int)localEntryType);
+                            SetIndiRef(localIndId, localEntryType, localSubstring);
                             }
 
                             localSubstring = string.Empty;
@@ -2413,28 +2657,7 @@ public sealed class FBEntryParser : ParserBase, IDisposable
     }
 
     private bool BuildName(string innerText, ref int innerOffset, ref string innerSubstring, ref string innerData, ref int localCharCount, ref string? localAka, ref ParserEventType localAddEvent)
-    {
-        var result = false;
-        if (BuildName2(innerText, ref innerOffset, ref localCharCount, ref innerSubstring, out var additional))
-        {
-            if (additional == CsTwin)
-            {
-                innerData = innerData == string.Empty ? "Zwilling" : innerData + "; Zwilling";
-            }
-            else if (additional != string.Empty)
-            {
-                localAka = additional;
-                localAddEvent = ParserEventType.evt_AKA;
-                localCharCount = 0;
-            }
-        }
-        else
-        {
-            result = innerSubstring.Trim().Length > 0;
-        }
-
-        return result;
-    }
+        => _nameTokenBuilder.BuildName(innerText, ref innerOffset, ref innerSubstring, ref innerData, ref localCharCount, ref localAka, ref localAddEvent);
 
     private bool BuildData(string individualId, string innerText, ref int innerOffset, ref string innerSubstring, ref string innerData, string? localMainFamRef, int localLastZiffCount, ref bool localFamDatFlag, ref bool localEntryEndFlag, ref ParserEventType localEntryType)
     {
@@ -2801,38 +3024,22 @@ public sealed class FBEntryParser : ParserBase, IDisposable
         => Error(this, _mainRef + ": " + message);
 
     private void SetFamilyMember(string famRef, string individualId, int famMember)
-        => OnFamilyIndiv?.Invoke(this, individualId, famRef, famMember);
+        => _eventEmitter.SetFamilyMember(famRef, individualId, famMember);
 
     private void SetFamilyDate(string famRef, ParserEventType eventType, string date)
-    {
-        if (!IsValidDate(date))
-        {
-            Error(this, QuotedString(date) + " is no valid Date");
-        }
-        else
-        {
-            OnFamilyDate?.Invoke(this, date, famRef, (int)eventType);
-        }
-    }
+        => _eventEmitter.SetFamilyDate(famRef, eventType, date);
 
     private void SetFamilyPlace(string famRef, ParserEventType eventType, string place)
-    {
-        if (!IsValidPlace(place))
-        {
-            Error(this, QuotedString(place) + " is no valid Place");
-        }
-
-        OnFamilyPlace?.Invoke(this, place, famRef, (int)eventType);
-    }
+        => _eventEmitter.SetFamilyPlace(famRef, eventType, place);
 
     private void SetFamilyData(string famRef, ParserEventType eventType, string data)
-        => OnFamilyData?.Invoke(this, data, famRef, (int)eventType);
+        => _eventEmitter.SetFamilyData(famRef, eventType, data);
 
     private void SetIndiName(string individualId, int nameType, string name)
-        => OnIndiName?.Invoke(this, name, individualId, nameType);
+        => _eventEmitter.SetIndiName(individualId, nameType, name);
 
     private void SetIndiData(string individualId, ParserEventType eventType, string data)
-        => OnIndiData?.Invoke(this, data, individualId, (int)eventType);
+        => _eventEmitter.SetIndiData(individualId, eventType, data);
 
     private bool TryConsumeLeadingEntry(ref string subString, string[] testStrings, out string rest)
     {
@@ -2854,48 +3061,28 @@ public sealed class FBEntryParser : ParserBase, IDisposable
         return false;
     }
     private void SetIndiDate(string individualId, ParserEventType eventType, string date)
-    {
-        if (!IsValidDate(date))
-        {
-            Error(this, QuotedString(date) + " is no valid Date");
-        }
-        else
-        {
-            OnIndiDate?.Invoke(this, date, individualId, (int)eventType);
-        }
-    }
+        => _eventEmitter.SetIndiDate(individualId, eventType, date);
 
     private void SetIndiPlace(string individualId, ParserEventType eventType, string place)
-    {
-        if (!IsValidPlace(place))
-        {
-            Error(this, QuotedString(place) + " is no valid Place");
-        }
-
-        OnIndiPlace?.Invoke(this, place, individualId, (int)eventType);
-    }
+        => _eventEmitter.SetIndiPlace(individualId, eventType, place);
 
     private void SetIndiOccu(string individualId, ParserEventType eventType, string occu)
-        => OnIndiOccu?.Invoke(this, occu, individualId, (int)eventType);
+        => _eventEmitter.SetIndiOccu(individualId, eventType, occu);
 
     private void SetIndiRelat(string individualId, string famRef, int relType)
-    {
-        if (famRef == "0" && _mainRef != "0")
-        {
-            Error(this, QuotedString(famRef) + " is no valid Ref");
-        }
+        => _eventEmitter.SetIndiRelat(individualId, famRef, relType, _mainRef);
 
-        OnIndiRel?.Invoke(this, famRef, individualId, relType);
-    }
+    private void SetIndiRef(string individualId, ParserEventType eventType, string reference)
+        => _eventEmitter.SetIndiRef(individualId, eventType, reference);
 
     private void StartFamily(string famRef)
-        => OnStartFamily?.Invoke(this, famRef, string.Empty, 0);
+        => _eventEmitter.StartFamily(famRef);
 
     private void SetFamilyType(string famRef, int famType, string data = "")
-        => OnFamilyType?.Invoke(this, data, famRef, famType);
+        => _eventEmitter.SetFamilyType(famRef, famType, data);
 
     private void EndOfEntry(string famRef)
-        => OnEntryEnd?.Invoke(this, string.Empty, famRef, -1);
+        => _eventEmitter.EndOfEntry(famRef);
 
     /// <summary>
     /// Parses text enclosed in parentheses as an additional entry payload.
@@ -2936,428 +3123,91 @@ public sealed class FBEntryParser : ParserBase, IDisposable
     /// Removes a trailing month token from a place fragment when needed.
     /// </summary>
     public void TrimPlaceByMonth(ref string place)
-    {
-        var flag = false;
-        for (var index = 1; index < CMonthKn.Length; index++)
-        {
-            if (place.EndsWith(CMonthKn[index], StringComparison.Ordinal))
-            {
-                place = Copy(place, 1, place.Length - CMonthKn[index].Length).Trim();
-                flag = true;
-                break;
-            }
-
-            var shortMonth = Copy(CMonthKn[index], 1, 3) + ".";
-            if (place.EndsWith(shortMonth, StringComparison.Ordinal))
-            {
-                place = Copy(place, 1, place.Length - 4).Trim();
-                flag = true;
-                break;
-            }
-        }
-
-        if (flag && (" " + place).EndsWith(" " + CsPlaceKenn6, StringComparison.Ordinal))
-        {
-            place = Copy(place, 1, place.Length - 3).Trim();
-        }
-    }
+        => _entryAnalyzer.TrimPlaceByMonth(ref place);
 
     /// <summary>
     /// Removes a trailing date modifier from a place fragment when needed.
     /// </summary>
     public void TrimPlaceByModif(ref string place)
-    {
-        for (var index = 1; index < CDateModif.Length; index++)
-        {
-            if ((" " + place).EndsWith(" " + CDateModif[index], StringComparison.Ordinal))
-            {
-                place = Copy(place, 1, place.Length - CDateModif[index].Length).Trim();
-                break;
-            }
-        }
-    }
+        => _entryAnalyzer.TrimPlaceByModif(ref place);
 
     /// <summary>
     /// Determines the event type encoded by a free-text entry prefix.
     /// </summary>
     public ParserEventType GetEntryType(string subString, out string date, out string data)
-    {
-        var result = ParserEventType.evt_Last;
-        data = string.Empty;
-        date = string.Empty;
-
-        if (TestEntry(subString, [CsBaptism, CsBaptism2], out date))
-        {
-            result = ParserEventType.evt_Baptism;
-        }
-        else if (TestEntry(subString, CsBirth, out date))
-        {
-            result = ParserEventType.evt_Birth;
-        }
-        else if (TestEntry(subString, [CsBurial, CsBurial2], out date))
-        {
-            result = ParserEventType.evt_Burial;
-        }
-        else if (TestEntry(subString, CMarriageKn, out date))
-        {
-            result = ParserEventType.evt_Marriage;
-        }
-        else if (TestEntry(subString, [CsDeathEntr, CsDeathEntr2], out date))
-        {
-            result = ParserEventType.evt_Death;
-        }
-        else if (TestEntry(subString, [CsDeathEntr + CsBirth, CsDeathEntr2 + CsBirth], out date))
-        {
-            result = ParserEventType.evt_Stillborn;
-            data = "totgeboren";
-        }
-        else if (TestEntry(subString, CsDeathGefEntr, out date))
-        {
-            result = ParserEventType.evt_fallen;
-            data = CsDeathGefEntr;
-        }
-        else if (TestEntry(subString, CsDivorce, out date))
-        {
-            result = ParserEventType.evt_Divorce;
-        }
-        else if (TestEntry(subString, [CsDeathVermEntr, CsDeathVermEntr2], out date))
-        {
-            result = ParserEventType.evt_missing;
-            data = CsDeathVermEntr;
-        }
-        else if (subString.Contains(CsEmigration, StringComparison.Ordinal) || subString.Contains(CsEmigration2, StringComparison.Ordinal))
-        {
-            result = ParserEventType.evt_AddEmigration;
-            var subString2 = subString.StartsWith("ist", StringComparison.Ordinal) ? RemoveStart(subString, 4) : subString;
-            data = Left(subString2, subString2.Length - CsEmigration.Length - 1);
-        }
-        else if (subString.EndsWith(" " + CsAge, StringComparison.Ordinal))
-        {
-            result = ParserEventType.evt_Age;
-            data = subString;
-        }
-        else if (TestEntry(subString, CArtikelU, out data))
-        {
-            result = ParserEventType.evt_Description;
-            data = subString;
-        }
-        else if (subString.Contains(CsGenannt, StringComparison.Ordinal))
-        {
-            result = ParserEventType.evt_AKA;
-            var subString2 = subString.StartsWith(CsWurde, StringComparison.Ordinal) ? RemoveStart(subString, CsWurde.Length).Trim() : subString;
-            var pp = subString2.IndexOf(CsGenannt, StringComparison.Ordinal);
-            data = (Left(subString2, pp).Trim() + " " + Copy(subString2, pp + CsGenannt.Length + 1).Trim()).Trim();
-        }
-        else if (TestEntry(subString, CArtikelB, out data))
-        {
-            result = ParserEventType.evt_AKA;
-            data = subString;
-        }
-        else if (TestFor(subString, 1, CDescriptKn, out var found) && CDescriptKn[found] == subString)
-        {
-            result = ParserEventType.evt_Description;
-            data = subString;
-        }
-        else if (TestFor(subString, 1, CResidenceKn, out found))
-        {
-            result = ParserEventType.evt_Residence;
-            data = CResidenceKn[found];
-            date = subString[data.Length..].Trim();
-            if (date != string.Empty && !date.StartsWith(CsPlaceKenn + " ", StringComparison.Ordinal) && !date.StartsWith(CsDateModif4 + " ", StringComparison.Ordinal) && !Ziffern.Contains(date[0]))
-            {
-                data += " " + date;
-                date = string.Empty;
-            }
-        }
-        else if (IndexOfAny(subString, CPropertyKn) > 0)
-        {
-            result = ParserEventType.evt_Property;
-            data = subString;
-        }
-        else if (IndexOfAny(subString, CAddressKn) > 0 && ((subString.Length > 0 && UpperCharset.Contains(subString[0])) || TestFor(subString, 1, CUmLautsU)) && CountChar(subString, ' ') < 2)
-        {
-            result = ParserEventType.evt_Residence;
-            data = subString;
-        }
-        else if (TestFor(subString + '.', 1, CReligions, out found))
-        {
-            result = ParserEventType.evt_Religion;
-            data = CReligions[found];
-        }
-
-        return result;
-    }
+        => _entryAnalyzer.GetEntryType(subString, out date, out data);
 
     /// <summary>
     /// Analyses a generic entry and splits it into event type, data, place, and date fragments.
     /// </summary>
     public void AnalyseEntry(ref string subString, out ParserEventType entryType, out string data, out string place, out string date)
-    {
-        entryType = ParserEventType.evt_Anull;
-        date = string.Empty;
-        data = string.Empty;
-        place = string.Empty;
+        => _entryAnalyzer.AnalyseEntry(ref subString, _defaultPlace, _mode, out entryType, out data, out place, out date);
 
-        var dPos = LastIndexOfAny(subString, Ziffern);
-        if (dPos >= 0)
-        {
-            dPos++;
-        }
+    private IGenealogicalEntryAnalyzer CreateEntryAnalyzer()
+        => new GenealogicalEntryAnalyzer(
+            new GenealogicalEntryAnalyzerConfiguration
+            {
+                ProtectSpace = CsProtectSpace,
+                BirthMarker = CsBirth,
+                BaptismMarkers = [CsBaptism, CsBaptism2],
+                BurialMarkers = [CsBurial, CsBurial2],
+                MarriageMarkers = CMarriageKn,
+                DeathMarkers = [CsDeathEntr, CsDeathEntr2],
+                StillbornMarkers = [CsDeathEntr + CsBirth, CsDeathEntr2 + CsBirth],
+                FallenMarker = CsDeathGefEntr,
+                DivorceMarker = CsDivorce,
+                MissingMarkers = [CsDeathVermEntr, CsDeathVermEntr2],
+                EmigrationMarkers = [CsEmigration, CsEmigration2],
+                DateModifiers = CDateModif,
+                SinceDateModifier = CsDateModif4,
+                AgeMarker = CsAge,
+                IndefiniteArticles = CArtikelU,
+                DefiniteArticles = CArtikelB,
+                AkaMarker = CsGenannt,
+                BecameMarker = CsWurde,
+                DescriptionMarkers = CDescriptKn,
+                ResidenceMarkers = CResidenceKn,
+                PlaceMarkers = CPlaceKn,
+                UnknownMarkers = CUnknownKn,
+                PropertyMarkers = CPropertyKn,
+                AddressMarkers = CAddressKn,
+                ReligionMarkers = CReligions,
+                MonthNames = CMonthKn,
+                UpperUmlautMarkers = CUmLautsU,
+                InPlaceMarker = CsPlaceKenn,
+                ToPlaceMarker = CsPlaceKenn3,
+                FromPlaceMarker = CsPlaceKenn2,
+                InMonthPlaceMarker = CsPlaceKenn6,
+                OnDatePlaceMarker = CsPlaceKenn4,
+                MarriagePartnerMarker = CsMarrPartKn,
+                IsValidDate = IsValidDate,
+                IsValidPlace = IsValidPlace,
+                Warning = message => Warning(this, message),
+            });
 
-        var placBesch = false;
-        var pp2 = -1;
-        var found = -1;
-
-        if (TestFor(subString, dPos + 2, CPlaceKn, out found))
-        {
-            place = Copy(subString, dPos + 2 + CPlaceKn[found].Length).Trim();
-            placBesch = place == string.Empty || LowerCharset.Contains(place[0]);
-            if (placBesch)
+    private IGenealogicalEventEmitter CreateEventEmitter()
+        => new GenealogicalEventEmitter(
+            new GenealogicalEventEmitterConfiguration
             {
-                place = string.Empty;
-                data = subString;
-                if (dPos < 0)
-                {
-                    entryType = ParserEventType.evt_Residence;
-                }
-            }
-            else if (dPos < 0)
-            {
-                entryType = ParserEventType.evt_Residence;
-                subString = string.Empty;
-            }
-            else
-            {
-                subString = Copy(subString, 1, dPos + 1).Trim();
-            }
-        }
-        else
-        {
-            var pp = (" " + subString).IndexOf(" " + CsPlaceKenn + " ", StringComparison.Ordinal);
-            if (pp < 0)
-            {
-                pp = (" " + subString).IndexOf(" " + CsPlaceKenn6 + " ", StringComparison.Ordinal);
-                found = 5;
-                if (pp > 5)
-                {
-                    pp = -1;
-                }
-            }
-            else
-            {
-                found = 0;
-            }
-
-            var pl = 1;
-            if (pp < 0)
-            {
-                pp = (CsProtectSpace + subString).IndexOf(CsProtectSpace + CsPlaceKenn + " ", StringComparison.Ordinal);
-                if (pp >= 0)
-                {
-                    pl = CsProtectSpace.Length;
-                    found = 0;
-                }
-            }
-
-            pp2 = IndexOfAny(subString, Ziffern);
-            if (pp >= 0 && pp2 < pp && (subString.Length < pp + CsPlaceKenn.Length + 3 || subString[pp + CsPlaceKenn.Length + 2] != 'd'))
-            {
-                place = Copy(subString, pp + 4);
-                subString = Copy(subString, 1, pp - pl);
-                if (subString == string.Empty)
-                {
-                    entryType = ParserEventType.evt_Residence;
-                }
-            }
-            else if (pp >= 0 && pp2 > pp)
-            {
-                place = Copy(subString, pp + 4, pp2 - pp - 4).Trim();
-                if (subString.Length - pp2 < 7)
-                {
-                    TrimPlaceByMonth(ref place);
-                }
-
-                TrimPlaceByModif(ref place);
-                subString = Copy(subString, 1, pp) + Copy(subString, pp + 4 + place.Length);
-                pp2 = IndexOfAny(subString, Ziffern);
-            }
-            else
-            {
-                pp = Pos(" " + CsPlaceKenn2 + " ", " " + subString);
-                if (pp != 0)
-                {
-                    found = 1;
-                    place = Copy(subString, pp + 4);
-                    subString = Copy(subString, 1, pp - 1);
-                    if (subString == string.Empty)
-                    {
-                        entryType = ParserEventType.evt_Residence;
-                    }
-                }
-                else
-                {
-                    place = string.Empty;
-                }
-            }
-        }
-
-        if (entryType != ParserEventType.evt_Residence)
-        {
-            entryType = GetEntryType(subString, out date, out data);
-        }
-
-        if (entryType == ParserEventType.evt_Last && found >= 0)
-        {
-            entryType = GetEntryType(subString + " " + CPlaceKn[found] + " " + place, out date, out data);
-        }
-
-        if (entryType == ParserEventType.evt_Description && place != string.Empty && TestFor(subString, 1, CArtikelU, out var found2))
-        {
-            entryType = ParserEventType.evt_Occupation;
-            subString = Copy(subString, CArtikelU[found2].Length + 1).Trim();
-        }
-
-        var pp3Text = data.IndexOf(CsPlaceKenn3, StringComparison.Ordinal);
-        if (pp3Text >= 0 && entryType == ParserEventType.evt_AddEmigration)
-        {
-            pp2 = IndexOfAny(data, Ziffern);
-            place = Copy(data, pp3Text + CsPlaceKenn3.Length + 2).Trim();
-            if (pp2 < 0)
-            {
-                date = string.Empty;
-            }
-            else
-            {
-                var rest = Copy(data, 1, pp2).Trim();
-                TrimPlaceByMonth(ref rest);
-                TrimPlaceByModif(ref rest);
-                date = Copy(data, rest.Length + 1, pp3Text - rest.Length).Trim();
-            }
-
-            if (data.Length < subString.Length)
-            {
-                data = subString;
-            }
-            else
-            {
-                data += " " + CsEmigration;
-            }
-        }
-
-        if (entryType == ParserEventType.evt_Property && !IsValidPlace(place))
-        {
-            data = data + " " + CPlaceKn[found] + " " + place;
-            place = string.Empty;
-        }
-
-        if ((place.Trim() == string.Empty || !IsValidDate(date) || date.Length > 14)
-            && entryType is >= ParserEventType.evt_Birth and <= ParserEventType.evt_Burial or ParserEventType.evt_Stillborn or ParserEventType.evt_fallen or ParserEventType.evt_missing
-            && date.Length > 1
-            && (UpperCharset.Contains(date[0]) || TestFor(date, 1, CUmLautsU) || TestFor(date, 1, CUnknownKn)))
-        {
-            var place0 = place.Trim() != string.Empty ? place : string.Empty;
-            pp2 = IndexOfAny(date, Ziffern);
-            if (TestFor(date, 1, CUnknownKn, out found2))
-            {
-                place = CUnknownKn[found2];
-                date = Copy(date, place.Length + 1).Trim();
-            }
-            else if (pp2 > 1 && dPos > date.Length)
-            {
-                place = Left(date, pp2).Trim();
-                if (date.Length - pp2 < 7)
-                {
-                    TrimPlaceByMonth(ref place);
-                }
-
-                TrimPlaceByModif(ref place);
-                date = Copy(date, place.Length + 1).Trim();
-                if (place == string.Empty)
-                {
-                    place = place0;
-                }
-                else if (place0.Trim() != string.Empty)
-                {
-                    place = place + " " + CPlaceKn[found] + " " + place0;
-                }
-            }
-            else if (pp2 == -1 && place0 == string.Empty)
-            {
-                place = date;
-                date = string.Empty;
-            }
-            else
-            {
-                var pos = date.Length > 12 ? date.IndexOf(' ', date.Length - 12) : date.LastIndexOf(' ');
-                if (pos > 0)
-                {
-                    place = Left(date, pos);
-                    date = Copy(date, pos + 2);
-                }
-            }
-        }
-        else if (pp2 >= 0 && data == string.Empty && date == string.Empty)
-        {
-            var pp3 = LastIndexOfAny(subString, Ziffern);
-            if (!((pp3 == pp2) || (pp3 == pp2 + 1) || (pp3 == pp2 + 2))
-                && pp3 >= 2
-                && In(subString[pp3 - 2], Ziffern)
-                && In(subString[pp3 - 1], Ziffern)
-                && In(subString[pp3], Ziffern)
-                && !Copy(subString, pp2 + 3, pp3 - pp2 - 9).Contains(' ')
-                && !(pp2 == 0 && subString.Contains("Jahre", StringComparison.Ordinal)))
-            {
-                var rest = Left(subString, pp2).Trim();
-                if (rest.Length - pp2 < 7)
-                {
-                    TrimPlaceByMonth(ref rest);
-                }
-
-                TrimPlaceByModif(ref rest);
-                date = Copy(subString, rest.Length + 1, pp3 - rest.Length + 1).Trim();
-                subString = (rest + Copy(subString, pp3 + 2)).Trim();
-            }
-        }
-
-        if (entryType == ParserEventType.evt_Marriage)
-        {
-            if (date.StartsWith(CsMarrPartKn + " ", StringComparison.Ordinal) && pp2 < 0)
-            {
-                subString = date;
-                date = string.Empty;
-            }
-
-            if (date.Contains(" " + CsMarrPartKn + " ", StringComparison.Ordinal) && pp2 >= 0)
-            {
-                subString = Copy(date, date.IndexOf(CsMarrPartKn, StringComparison.Ordinal) + 1);
-                date = Copy(date, 1, date.Length - subString.Length).Trim();
-            }
-        }
-
-        if (date.StartsWith(CsPlaceKenn6 + " ", StringComparison.Ordinal) || date.StartsWith(CsPlaceKenn4 + " ", StringComparison.Ordinal))
-        {
-            date = Copy(date, CsPlaceKenn4.Length + 2);
-        }
-
-        if (place.Trim() == string.Empty && !new[] { 55, 56, 57 }.Contains(_mode) && !placBesch && entryType != ParserEventType.evt_Divorce)
-        {
-            place = _defaultPlace;
-        }
-
-        if (!IsValidPlace(place))
-        {
-            Warning(this, "Misspelled Place \"" + place + "\"");
-            while (place != string.Empty && !Charset.Contains(place[0]))
-            {
-                place = RemoveStart(place, 1);
-            }
-        }
-
-        if (entryType is ParserEventType.evt_fallen or ParserEventType.evt_missing)
-        {
-            entryType = ParserEventType.evt_Death;
-        }
-    }
+                IsValidDate = IsValidDate,
+                IsValidPlace = IsValidPlace,
+                IsValidReference = TestReferenz,
+                Error = message => Error(this, message),
+                OnStartFamily = famRef => OnStartFamily?.Invoke(this, famRef, string.Empty, 0),
+                OnEntryEnd = famRef => OnEntryEnd?.Invoke(this, string.Empty, famRef, -1),
+                OnFamilyDate = (data, reference, subType) => OnFamilyDate?.Invoke(this, data, reference, subType),
+                OnFamilyType = (data, reference, subType) => OnFamilyType?.Invoke(this, data, reference, subType),
+                OnFamilyData = (data, reference, subType) => OnFamilyData?.Invoke(this, data, reference, subType),
+                OnFamilyPlace = (data, reference, subType) => OnFamilyPlace?.Invoke(this, data, reference, subType),
+                OnFamilyIndiv = (data, reference, subType) => OnFamilyIndiv?.Invoke(this, data, reference, subType),
+                OnIndiName = (data, reference, subType) => OnIndiName?.Invoke(this, data, reference, subType),
+                OnIndiDate = (data, reference, subType) => OnIndiDate?.Invoke(this, data, reference, subType),
+                OnIndiPlace = (data, reference, subType) => OnIndiPlace?.Invoke(this, data, reference, subType),
+                OnIndiOccu = (data, reference, subType) => OnIndiOccu?.Invoke(this, data, reference, subType),
+                OnIndiRel = (data, reference, subType) => OnIndiRel?.Invoke(this, data, reference, subType),
+                OnIndiRef = (data, reference, subType) => OnIndiRef?.Invoke(this, data, reference, subType),
+                OnIndiData = (data, reference, subType) => OnIndiData?.Invoke(this, data, reference, subType),
+            });
 
     /// <summary>
     /// Handles an entry that is not a person name and emits the corresponding callbacks.
@@ -3365,148 +3215,7 @@ public sealed class FBEntryParser : ParserBase, IDisposable
     public ParserEventType HandleNonPersonEntry(string subString, string individualId, string famRef = "", ParserEventType previousEntryType = ParserEventType.evt_Anull)
     {
         Debug(this, "HNPE: \"" + subString + "\"");
-        var localSubString = subString.Trim();
-        var localFamRef = famRef;
-        if (localSubString == string.Empty || localSubString == ".")
-        {
-            return ParserEventType.evt_Anull;
-        }
-
-        AnalyseEntry(ref localSubString, out var entryType, out var data, out var place, out var date);
-        if (entryType == ParserEventType.evt_Stillborn)
-        {
-            SetIndiDate(individualId, ParserEventType.evt_Birth, date);
-            SetIndiData(individualId, ParserEventType.evt_Birth, "totgeboren");
-            if (place != string.Empty)
-            {
-                SetIndiPlace(individualId, ParserEventType.evt_Birth, place);
-            }
-
-            SetIndiDate(individualId, ParserEventType.evt_Death, date);
-            if (place != string.Empty)
-            {
-                SetIndiPlace(individualId, ParserEventType.evt_Death, place);
-            }
-        }
-        else if (entryType is ParserEventType.evt_Marriage or ParserEventType.evt_Divorce)
-        {
-            if (localFamRef == string.Empty)
-            {
-                localFamRef = Ziffern.Contains(individualId[^1]) ? individualId[1..] + "P0" : individualId[1..] + "0";
-            }
-
-            StartFamily(localFamRef);
-            char sex;
-            if (localSubString.StartsWith(CsMarrPartKn + " ", StringComparison.Ordinal))
-            {
-                _ = HandleAKPersonEntry(Copy(localSubString, 4), localFamRef, 'U', 57, out _, out sex);
-            }
-            else
-            {
-                sex = 'F';
-            }
-
-            SetFamilyMember(localFamRef, individualId, sex == 'M' ? 2 : 1);
-            if (date != string.Empty)
-            {
-                SetFamilyDate(localFamRef, entryType, date);
-            }
-
-            if (place != string.Empty)
-            {
-                SetFamilyPlace(localFamRef, entryType, place);
-            }
-
-            if (data != string.Empty || (date == string.Empty && place == string.Empty))
-            {
-                SetFamilyData(localFamRef, entryType, data);
-            }
-        }
-        else if (entryType > ParserEventType.evt_ID && entryType != ParserEventType.evt_Last && entryType != ParserEventType.evt_Occupation)
-        {
-            if (date != string.Empty)
-            {
-                SetIndiDate(individualId, entryType, date);
-            }
-
-            if (place != string.Empty)
-            {
-                SetIndiPlace(individualId, entryType, place);
-            }
-
-            if (data != string.Empty)
-            {
-                SetIndiData(individualId, entryType, data);
-            }
-        }
-        else
-        {
-            var hasLedig = TryConsumeLeadingEntry(ref localSubString, CLedigKn, out var rest);
-            if (hasLedig)
-            {
-                localSubString = rest;
-            }
-
-            if (TryConsumeLeadingEntry(ref localSubString, CArtikelU, out rest))
-            {
-                localSubString = rest;
-            }
-
-            var hasOccupationText = localSubString.Trim() != string.Empty;
-            var emitLedigOccupationPlace = hasLedig && hasOccupationText;
-            if (hasLedig && !hasOccupationText)
-            {
-                if (previousEntryType == ParserEventType.evt_Occupation && _defaultPlace != string.Empty)
-                {
-                    SetIndiPlace(individualId, ParserEventType.evt_Occupation, _defaultPlace);
-                }
-                else
-                {
-                    var descriptionPlace = place != string.Empty ? place : _defaultPlace;
-                    if (descriptionPlace != string.Empty)
-                    {
-                        SetIndiPlace(individualId, ParserEventType.evt_Description, descriptionPlace);
-                    }
-                }
-
-                place = string.Empty;
-            }
-
-            if (hasLedig)
-            {
-                SetIndiData(individualId, ParserEventType.evt_Description, CsLedig);
-            }
-
-            entryType = ParserEventType.evt_Occupation;
-            if (TestFor(localSubString.Trim(), 1, CTitel))
-            {
-                SetIndiName(individualId, 4, localSubString.Trim());
-            }
-            else if (localSubString != string.Empty)
-            {
-                SetIndiOccu(individualId, entryType, localSubString.Trim());
-            }
-            else if (date != string.Empty)
-            {
-                Warning(this, "Entry contains no Marker, only a Date");
-            }
-
-            if (date != string.Empty)
-            {
-                SetIndiDate(individualId, entryType, date);
-            }
-
-            if (place != string.Empty)
-            {
-                SetIndiPlace(individualId, entryType, place);
-            }
-            else if (emitLedigOccupationPlace && _defaultPlace != string.Empty)
-            {
-                SetIndiPlace(individualId, entryType, _defaultPlace);
-            }
-        }
-
-        return entryType;
+        return _factHandler.HandleNonPersonEntry(subString, individualId, _defaultPlace, famRef, previousEntryType);
     }
 
     /// <summary>
@@ -3515,37 +3224,35 @@ public sealed class FBEntryParser : ParserBase, IDisposable
     public void HandleFamilyFact(string mainFamRef, string famEntry)
     {
         Debug(this, "HFF: \"" + famEntry + "\"");
-        var subString = famEntry.Trim();
-        if (subString == string.Empty || subString == ".")
-        {
-            return;
-        }
-
-        AnalyseEntry(ref subString, out var entryType, out var data, out var place, out var date);
-        if (date != string.Empty)
-        {
-            SetFamilyDate(mainFamRef, entryType, date);
-        }
-
-        if (place != string.Empty && entryType != ParserEventType.evt_Last)
-        {
-            SetFamilyPlace(mainFamRef, entryType, place);
-        }
-
-        if (data != string.Empty || (date == string.Empty && place == string.Empty && entryType != ParserEventType.evt_Last))
-        {
-            SetFamilyData(mainFamRef, entryType, data);
-        }
-        else if (subString != string.Empty && entryType == ParserEventType.evt_Last)
-        {
-            if (place != string.Empty)
-            {
-                SetFamilyPlace(mainFamRef, ParserEventType.evt_Residence, place);
-            }
-
-            SetFamilyData(mainFamRef, ParserEventType.evt_Residence, subString);
-        }
+        _factHandler.HandleFamilyFact(mainFamRef, famEntry);
     }
+
+    private IGenealogicalFactHandler CreateFactHandler()
+        => new GenealogicalFactHandler(
+            new GenealogicalFactHandlerConfiguration
+            {
+                LedigMarkers = CLedigKn,
+                IndefiniteArticles = CArtikelU,
+                TitleMarkers = CTitel,
+                LedigText = CsLedig,
+                MarriagePartnerMarker = CsMarrPartKn,
+                AnalyseEntry = AnalyseEntry,
+                StartFamily = StartFamily,
+                SetFamilyMember = SetFamilyMember,
+                SetFamilyDate = SetFamilyDate,
+                SetFamilyPlace = SetFamilyPlace,
+                SetFamilyData = SetFamilyData,
+                SetIndiDate = SetIndiDate,
+                SetIndiPlace = SetIndiPlace,
+                SetIndiData = SetIndiData,
+                SetIndiOccu = SetIndiOccu,
+                SetIndiName = SetIndiName,
+                SetFamilyType = SetFamilyType,
+                HandleAkPersonEntry = HandleAKPersonEntry,
+                TryConsumeLeadingEntry = TryConsumeLeadingEntry,
+                TestFor = TestFor,
+                Warning = message => Warning(this, message),
+            });
 
     /// <summary>
     /// Handles a GC date entry.
@@ -3555,197 +3262,20 @@ public sealed class FBEntryParser : ParserBase, IDisposable
 #if DEBUG
         Debug(this, "HGDE: \"" + Copy(text, position, 30) + "\"");
 #endif
-        if (TestFor(text, position, CsBirth)
-            || TestFor(text, position, CsBaptism2)
-            || TestFor(text, position, CsDeathEntr)
-            || TestFor(text, position, CsBurial2))
-        {
-            retMode = mode;
-            mode = 101;
-            if (TestFor(text, position, CsBirth))
-            {
-                entryType = ParserEventType.evt_Birth;
-            }
-            else if (TestFor(text, position, CsBaptism2))
-            {
-                entryType = ParserEventType.evt_Baptism;
-            }
-            else if (TestFor(text, position, CsDeathEntr))
-            {
-                entryType = ParserEventType.evt_Death;
-            }
-            else
-            {
-                entryType = ParserEventType.evt_Burial;
-            }
-
-            return true;
-        }
-
-        if (TestForC(text, position, CsDeathGefEntr))
-        {
-            retMode = mode;
-            mode = 101;
-            position += CsDeathGefEntr.Length - 1;
-            SetIndiData(individualId, ParserEventType.evt_Death, CsDeathGefEntr);
-            entryType = ParserEventType.evt_Death;
-            return true;
-        }
-
-        if (TestForC(text, position, CsDeathVermEntr))
-        {
-            retMode = mode;
-            mode = 101;
-            position += CsDeathVermEntr.Length - 1;
-            SetIndiData(individualId, ParserEventType.evt_Death, CsDeathVermEntr);
-            entryType = ParserEventType.evt_Death;
-            return true;
-        }
-
-        return false;
+        return _gcHelper.HandleGcDateEntry(text, ref position, individualId, ref mode, ref retMode, ref entryType);
     }
 
     /// <summary>
     /// Handles a GC non-person entry.
     /// </summary>
     public bool HandleGCNonPersonEntry(string subString, char actChar, string individualId)
-    {
-        var localSubstring = subString;
-        if (((localSubstring.Length < 4) && localSubstring.EndsWith(".", StringComparison.Ordinal) && localSubstring.Length > 0 && char.IsLower(localSubstring[0]))
-            || localSubstring.Trim().Length == 2)
-        {
-            if (actChar == '.')
-            {
-                localSubstring += '.';
-            }
-
-            SetIndiData(individualId, ParserEventType.evt_Religion, localSubstring.Trim());
-            return true;
-        }
-
-        if (localSubstring.Length <= 2)
-        {
-            return false;
-        }
-
-        var pp = Pos(" in ", localSubstring);
-        string place;
-        if (pp != 0)
-        {
-            place = Copy(localSubstring, pp + 4, 255);
-            localSubstring = Copy(localSubstring, 1, pp - 1);
-        }
-        else
-        {
-            place = _defaultPlace;
-        }
-
-        foreach (var data in localSubstring.Split(','))
-        {
-            var trimmedData = data.Trim();
-            if (trimmedData == "Bürger")
-            {
-                SetIndiData(individualId, ParserEventType.evt_Residence, trimmedData);
-                if (place != string.Empty)
-                {
-                    SetIndiPlace(individualId, ParserEventType.evt_Residence, place.Trim());
-                }
-            }
-            else if (trimmedData == CsEmigration)
-            {
-                SetIndiData(individualId, ParserEventType.evt_AddEmigration, string.Empty);
-                if (place != string.Empty)
-                {
-                    SetIndiPlace(individualId, ParserEventType.evt_AddEmigration, place.Trim());
-                }
-            }
-            else if (TestFor(trimmedData, 1, CTitel))
-            {
-                SetIndiName(individualId, 4, trimmedData);
-                if (place != string.Empty)
-                {
-                    SetIndiPlace(individualId, ParserEventType.evt_Occupation, place.Trim());
-                }
-            }
-            else
-            {
-                SetIndiOccu(individualId, ParserEventType.evt_Occupation, trimmedData);
-                if (place != string.Empty)
-                {
-                    SetIndiPlace(individualId, ParserEventType.evt_Occupation, place.Trim());
-                }
-            }
-        }
-
-        return true;
-    }
+        => _gcHelper.HandleGcNonPersonEntry(subString, actChar, individualId);
 
     /// <summary>
     /// Builds a name token fragment from the current text position.
     /// </summary>
     public bool BuildName2(string text, ref int offset, ref int charCount, ref string subString, out string additional)
-    {
-        additional = string.Empty;
-        var currentChar = CharAt(text, offset);
-        if (In(currentChar, Charset))
-        {
-            subString += currentChar;
-            charCount++;
-        }
-        else if (currentChar == ' ')
-        {
-            subString += currentChar;
-            charCount = 0;
-        }
-        else if (TestFor(text, offset, CsProtectSpace))
-        {
-            subString += CsProtectSpace;
-            offset += CsProtectSpace.Length - 1;
-            charCount = 0;
-        }
-        else if (Copy(text, offset, CsUnknown.Length) == CsUnknown)
-        {
-            subString += CsUnknown;
-            offset += CsUnknown.Length - 1;
-            charCount = 0;
-        }
-        else if (currentChar == '.' && ((offset + 1 <= text.Length && new[] { ',', '.', ' ', '>' }.Contains(CharAt(text, offset + 1))) || TestFor(text, offset + 1, CsSeparator2) || (offset > 1 && In(CharAt(text, offset - 1), Charset.Concat(['.'])) && (charCount <= 3 || (offset + 1 <= text.Length && In(CharAt(text, offset + 1), UpperCharset))))))
-        {
-            subString += currentChar;
-        }
-        else if (TestFor(text, offset, ["-"], out var found) && offset > 1 && offset + 1 + found <= text.Length && In(CharAt(text, offset - 1), LowerCharset) && In(CharAt(text, offset + 1 + found), UpperCharset))
-        {
-            subString += currentChar;
-            charCount = 0;
-        }
-        else if (TestFor(text, offset, ["-", "­"], out found) && offset > 1 && offset + 1 + found <= text.Length && In(CharAt(text, offset - 1), LowerCharset) && In(CharAt(text, offset + 1 + found), LowerCharset))
-        {
-            if (found == 0)
-            {
-                Warning(this, "Hyphen in Name Ignored");
-            }
-
-            charCount = 0;
-            offset += found;
-        }
-        else if (TestFor(text, offset, _umlauts, out found))
-        {
-            subString += _umlauts[found];
-            charCount++;
-            offset += _umlauts[found].Length - 1;
-        }
-        else if (TestFor(text, offset, CsSeparator2))
-        {
-            offset += CsSeparator2.Length - 1;
-            return false;
-        }
-        else
-        {
-            return TestFor(text, offset, "(") && ParseAdditional(text, ref offset, out additional);
-        }
-
-        return true;
-    }
+        => _nameTokenBuilder.BuildNameToken(text, ref offset, ref charCount, ref subString, out additional);
 
     /// <summary>
     /// Handles a person-name entry including title, maiden name, family membership, and inferred sex.
@@ -3753,171 +3283,65 @@ public sealed class FBEntryParser : ParserBase, IDisposable
     public string HandleAKPersonEntry(string personEntry, string mainFamRef, char personType, int mode, out string lastName, out char personSex, string aka = "", string famName = "")
     {
         Debug(this, "HANE: \"" + personEntry + "\"");
-        var localAka = aka;
-        var personName = !personEntry.Contains(CsUnknown2, StringComparison.Ordinal)
-            ? personEntry.Replace("  ", " ", StringComparison.Ordinal).Replace(". ", ".", StringComparison.Ordinal).Replace(".", ". ", StringComparison.Ordinal)
-            : (personEntry + " ").Replace("  ", " ", StringComparison.Ordinal);
-        var names = personName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var title = string.Empty;
-        if (TestFor(personName, 1, _akkaTitel, out var found))
-        {
-            title = _akkaTitel[found];
-            personName = Copy(personName, title.Length + 2);
-            names = personName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        if (names.Length > 0 && !names[^1].EndsWith(".", StringComparison.Ordinal) && GuessSexOfGivnName(names[^1], false) != '_' && localAka.StartsWith("?", StringComparison.Ordinal) && localAka.Length > 3)
-        {
-            lastName = Copy(localAka, 2).Trim().Replace(".", ". ", StringComparison.Ordinal);
-            if (lastName == Copy(famName, 1, lastName.Length - 2) + ". ")
-            {
-                lastName = famName;
-            }
-
-            personName += " " + lastName;
-            localAka = "? " + lastName;
-            names = personName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        var spouseLastName = string.Empty;
-        var marriageFlag = false;
-        for (var index = 1; index < names.Length - 1; index++)
-        {
-            if (names[index] == CsMaidenNameKn)
-            {
-                if (index > 1 && mode != 56)
-                {
-                    spouseLastName = names[index - 1];
-                    personName = personName.Replace(" " + spouseLastName, string.Empty, StringComparison.Ordinal);
-                }
-
-                personName = personName.Replace(" " + CsMaidenNameKn, string.Empty, StringComparison.Ordinal);
-                names = personName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                marriageFlag = true;
-                break;
-            }
-        }
-
-        lastName = names.Length > 0 ? names[^1] : string.Empty;
-        if (names.Length > 2 && names[^2] != string.Empty && LowerCharset.Contains(names[^2][0]))
-        {
-            lastName = names[^2] + " " + lastName;
-        }
-
-        if (!lastName.EndsWith(".", StringComparison.Ordinal) && GuessSexOfGivnName(lastName, false) != '_' && localAka.EndsWith(".", StringComparison.Ordinal) && localAka.Length < 4 && localAka == Copy(famName, 1, localAka.Length - 1) + ".")
-        {
-            lastName = famName;
-            personName += " " + lastName;
-            localAka = "? " + lastName;
-        }
-
-        if (lastName != string.Empty && (UpperCharset.Contains(lastName[0]) || lastName[0] == 'Ü') && lastName.EndsWith(".", StringComparison.Ordinal) && lastName.Length <= 4 && Copy(famName, 1, lastName.Length - 1) + "." == lastName)
-        {
-            personName = personName.Replace(lastName + " ", famName, StringComparison.Ordinal);
-            lastName = famName;
-        }
-        else
-        {
-            personName = personName.Trim();
-        }
-
-        if (personType == 'U' && Copy(personName, 1, personName.Length - lastName.Length - 1) != CsUnknown2)
-        {
-            personSex = GuessSexOfGivnName(Copy(personName, 1, personName.Length - lastName.Length - 1));
-        }
-        else
-        {
-            personSex = personType;
-        }
-
-        if (personSex is 'M' or 'F')
-        {
-            LearnSexOfGivnName(Copy(personName, 1, personName.Length - lastName.Length - 1), personType);
-        }
-
-        var result = "I" + mainFamRef + personSex;
-        if (marriageFlag)
-        {
-            SetFamilyType(mainFamRef, 1);
-        }
-
-        SetIndiName(result, 0, personName);
-        if (title != string.Empty)
-        {
-            SetIndiName(result, 4, title);
-        }
-
-        SetFamilyMember(mainFamRef, result, personSex == 'F' ? 2 : 1);
-        SetIndiData(result, ParserEventType.evt_Sex, personSex.ToString(CultureInfo.InvariantCulture));
-        if (localAka != string.Empty)
-        {
-            SetIndiName(result, 3, localAka.Trim());
-        }
-
-        return result;
+        return _personNameHandler.HandleAkPersonEntry(personEntry, mainFamRef, personType, mode, out lastName, out personSex, aka, famName);
     }
+
+    private IGenealogicalPersonNameHandler CreatePersonNameHandler()
+        => new GenealogicalPersonNameHandler(
+            new GenealogicalPersonNameHandlerConfiguration
+            {
+                UnknownShortMarker = CsUnknown2,
+                MaidenNameMarker = CsMaidenNameKn,
+                AcademicTitleMarkers = _akkaTitel,
+                TestFor = TestFor,
+                GuessSexOfGivenName = GuessSexOfGivnName,
+                LearnSexOfGivenName = LearnSexOfGivnName,
+                SetIndiName = SetIndiName,
+                SetIndiData = SetIndiData,
+                SetFamilyMember = SetFamilyMember,
+                SetFamilyType = SetFamilyType,
+            });
+
+    private IGenealogicalNameTokenBuilder CreateNameTokenBuilder()
+        => new GenealogicalNameTokenBuilder(
+            new GenealogicalNameTokenBuilderConfiguration
+            {
+                ProtectSpaceMarker = CsProtectSpace,
+                UnknownMarker = CsUnknown,
+                TwinMarker = CsTwin,
+                Separator2Marker = CsSeparator2,
+                UmlautMarkers = _umlauts,
+                TestFor = TestFor,
+                ParseAdditional = ParseAdditional,
+                Warning = message => Warning(this, message),
+            });
 
     /// <summary>
     /// Scans for a child event date following a <c>Kd:</c> or <c>Kdr:</c> marker.
     /// </summary>
     public string ScanForEvDate(string text, int offset)
-    {
-        var result = string.Empty;
-        var pos = Pos("Kd:", text, offset);
-        if (pos > 0)
-        {
-            pos--;
-        }
-        else
-        {
-            pos = Pos("Kdr:", text, offset);
-        }
+        => _gcHelper.ScanForEventDate(text, offset);
 
-        if (pos <= 0)
-        {
-            return result;
-        }
-
-        pos += 4;
-        var offs = pos;
-        var found = -1;
-        var ziffCount = 0;
-        while (offs < text.Length && ((In(CharAt(text, offs), Charset.Concat(WhiteSpaceChars).Concat([',']))) || TestFor(text, offs, _umlauts, out found)))
-        {
-            if (found >= 0)
+    private IGenealogicalGcHelper CreateGcHelper()
+        => new GenealogicalGcHelper(
+            new GenealogicalGcHelperConfiguration
             {
-                offs++;
-            }
-
-            offs++;
-            found = -1;
-        }
-
-        if (TestFor(text, offs, CsDeathEntr))
-        {
-            offs += CsDeathEntr.Length;
-        }
-
-        if (TestFor(text, offs, CsBirth))
-        {
-            offs += 1;
-        }
-
-        while (offs < text.Length && (In(CharAt(text, offs), Ziffern.Concat([' ', 'u', 'm', 'v', 'o', 'r'])) || (CharAt(text, offs) == '.' && ziffCount < 4)))
-        {
-            if (In(CharAt(text, offs), Ziffern))
-            {
-                ziffCount++;
-            }
-            else
-            {
-                ziffCount = 0;
-            }
-
-            result += CharAt(text, offs);
-            offs++;
-        }
-
-        return result;
-    }
+                BirthMarker = CsBirth,
+                BaptismMarker = CsBaptism2,
+                DeathMarker = CsDeathEntr,
+                BurialMarker = CsBurial2,
+                FallenMarker = CsDeathGefEntr,
+                MissingMarker = CsDeathVermEntr,
+                ChildDateMarker = "Kd:",
+                ChildDateMarkerAlternate = "Kdr:",
+                GetDefaultPlace = () => _defaultPlace,
+                UmlautMarkers = _umlauts,
+                TitleMarkers = CTitel,
+                TestFor = TestFor,
+                TestForCaseInsensitive = TestForC,
+                SetIndiData = SetIndiData,
+                SetIndiPlace = SetIndiPlace,
+                SetIndiOccu = SetIndiOccu,
+                SetIndiName = SetIndiName,
+            });
 }

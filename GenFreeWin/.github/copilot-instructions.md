@@ -13,6 +13,7 @@ Apply these defaults when working in this repository unless the user explicitly 
 - Prioritize adding comprehensive tests for newly created code before continuing larger feature or porting work.
 - Use BaseLib filesystem abstractions like `BaseLib.Models.Interfaces.IFile` and `BaseLib.Models.FileProxy` to avoid explicit file system dependencies, and add further interfaces/proxy classes when sensible.
 - Note that the `ArtifactsPath/UseArtifactsPath` migration has been rolled back for now because it is a larger separate undertaking and should not be pursued as part of the current parser work.
+- Avoid global usings; each file/class should declare its own usings so dependencies remain explicit.
 
 ## Testing
 - Use `MSTest` in the latest practical version for new or updated tests.

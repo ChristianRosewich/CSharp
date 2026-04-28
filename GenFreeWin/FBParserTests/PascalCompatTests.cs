@@ -1,4 +1,5 @@
 using FBParser;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace FBParserTests;
 
@@ -93,10 +94,10 @@ public sealed class PascalCompatTests
     [TestMethod]
     public void CharsetDefinitions_ContainExpectedGermanCharacters()
     {
-        CollectionAssert.Contains(PascalCompat.Charset.ToList(), 'ä');
-        CollectionAssert.Contains(PascalCompat.UpperCharsetErw.ToList(), 'Ä');
-        CollectionAssert.Contains(PascalCompat.LowerCharsetErw.ToList(), 'ß');
-        CollectionAssert.Contains(PascalCompat.AlphaNum.ToList(), '9');
-        CollectionAssert.Contains(PascalCompat.AlphaNum.ToList(), 'Ö');
+        Assert.IsTrue(PascalCompat.Charset.Contains('ä'));
+        Assert.IsTrue(PascalCompat.UpperCharsetErw.Contains('Ä'));
+        Assert.IsTrue(PascalCompat.LowerCharsetErw.Contains('ß'));
+        Assert.IsTrue(PascalCompat.AlphaNum.Contains('9'));
+        Assert.IsTrue(PascalCompat.AlphaNum.Contains('Ö'));
     }
 }
