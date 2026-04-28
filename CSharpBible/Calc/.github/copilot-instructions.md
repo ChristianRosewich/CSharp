@@ -68,3 +68,4 @@ Apply these defaults when working in this repository unless the user explicitly 
 
 ## Nullability
 - Use strict nullable reference types to indicate when a variable can be null, and handle nullability appropriately in code.
+- When fixing nullability issues in this repository, do not use null-forgiving assignments like 'null!'; if a variable can be assigned null, make the variable nullable instead.
