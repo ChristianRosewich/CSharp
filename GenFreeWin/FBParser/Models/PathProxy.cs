@@ -1,3 +1,4 @@
+using System.IO;
 using FBParser.Models.Interfaces;
 
 namespace FBParser.Models;
