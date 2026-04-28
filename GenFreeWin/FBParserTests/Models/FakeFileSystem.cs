@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
 using BaseLib.Models.Interfaces;
 using FBParser.Models.Interfaces;
@@ -13,13 +17,13 @@ internal sealed class FakeFileSystem : IFile, IDirectory, IPath
     public bool Exists(string sPath)
         => _files.ContainsKey(sPath) || _directories.Contains(sPath);
 
-    public Stream OpenRead(string sPath)
-        => new MemoryStream(ReadAllBytes(sPath), writable: false);
+    public System.IO.Stream OpenRead(string sPath)
+        => new System.IO.MemoryStream(ReadAllBytes(sPath), writable: false);
 
-    public Stream OpenWrite(string sPath)
+    public System.IO.Stream OpenWrite(string sPath)
         => throw new NotSupportedException();
 
-    public Stream Create(string sPath)
+    public System.IO.Stream Create(string sPath)
         => throw new NotSupportedException();
 
     public string ReadAllText(string sPath)
@@ -83,13 +87,13 @@ internal sealed class FakeFileSystem : IFile, IDirectory, IPath
         return path;
     }
 
-    public StreamWriter CreateStreamWriter(string sPath)
+    public System.IO.StreamWriter CreateStreamWriter(string sPath)
         => new(CreateWriteStream(sPath), new UTF8Encoding(false), leaveOpen: false);
 
-    private Stream CreateWriteStream(string sPath)
+    private System.IO.Stream CreateWriteStream(string sPath)
         => new FakeWriteBackStream(this, sPath);
 
-    private sealed class FakeWriteBackStream : MemoryStream
+    private sealed class FakeWriteBackStream : System.IO.MemoryStream
     {
         private readonly FakeFileSystem _fileSystem;
         private readonly string _path;
