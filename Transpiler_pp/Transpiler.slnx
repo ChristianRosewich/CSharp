@@ -36,6 +36,7 @@
   </Folder>
   <Folder Name="/Projektmappenelemente/">
     <File Path="../Gen_FreeWin/GenFreeWin.props" />
+    <File Path=".github/copilot-instructions.md" />
     <File Path="CONTRIBUTING.md" />
     <File Path="Transpiler.props" />
   </Folder>
@@ -44,6 +45,7 @@
     <Project Path="Analyzer1/Analyzer1.Package/Analyzer1.Package.csproj" />
     <Project Path="Analyzer1/Analyzer1.Vsix/Analyzer1.Vsix.csproj" />
     <Project Path="Analyzer1/Analyzer1/Analyzer1.csproj" />
+    <Project Path="DevOps/DevOps.shproj" Id="b7d27d6f-34e9-4f5a-bb5f-6a0d3f0f2c7c" />
     <Project Path="TranspilerConsTest/TranspilerConsTest.csproj" />
     <Project Path="TranspilerLib.CSharp.Tests/TranspilerLib.CSharp.Tests.csproj" />
     <Project Path="TranspilerLib.CSharp/TranspilerLib.CSharp.csproj" />
