@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Linq;
+using System.Runtime.Serialization;
 using TranspilerLib.Data;
+using TranspilerLib.IEC.Models.Ast;
 using TranspilerLib.Interfaces.Code;
 using TranspilerLib.Models.Scanner;
 
@@ -12,6 +14,14 @@ namespace TranspilerLib.IEC.Models.Scanner;
 /// </summary>
 public class IECCodeBlock : CodeBlock
 {
+    /// <summary>
+    /// Gets or sets the optional typed IEC AST node attached to this code block.
+    /// This allows incremental migration from the existing code block model to a
+    /// typed semantic model without replacing the current parser structure in one step.
+    /// </summary>
+    [IgnoreDataMember]
+    public IecAstNode? AstNode { get; set; }
+
     /// <summary>
     /// Erzeugt den (formatierten) Quellcode für diesen Block und seine Unter-Blöcke.
     /// </summary>
