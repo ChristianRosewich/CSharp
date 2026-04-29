@@ -1,5 +1,6 @@
 using System.Windows;
 using TraceAnalysis.Workbench.Wpf.ViewModels;
+using TraceAnalysis.Widgets.Wpf.ViewModels;
 
 namespace TraceAnalysis.Workbench.Wpf;
 
@@ -39,6 +40,11 @@ public partial class MainWindow : Window
     private void PreviewGroupBox_GotFocus(object sender, RoutedEventArgs e)
     {
         SetContext(WorkbenchContextKind.Preview);
+    }
+
+    private void TraceChartControl_GotFocus(object sender, RoutedEventArgs e)
+    {
+        SetContext(WorkbenchContextKind.Chart);
     }
 
     private void DiagnosticsPanelControl_GotFocus(object sender, RoutedEventArgs e)
