@@ -7,7 +7,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.Serialization.Json;
 using static TranspilerLib.Helper.TestHelper;
+using TranspilerLib.IEC.Models.Ast;
 using TranspilerLib.IEC.TestData;
+using TranspilerLib.IEC.Models.Scanner;
 using TranspilerLib.Models.Scanner;
 
 #pragma warning disable IDE0130 // Der Namespace entspricht stimmt nicht der Ordnerstruktur.
@@ -119,5 +121,71 @@ public class IECCodeBuilderTests
         Debug.WriteLine("Code:");
         Debug.WriteLine(codeBlock.ToCode(2));            
         AssertAreEqual(string.Join(Environment.NewLine, codes??[""]), codeBlock.ToString());
+    }
+
+    [TestMethod]
+    public void OnToken_Assignment_AttachesTypedLiteralAssignment()
+    {
+        var container = new CodeBlock() { Name = "Container", Code = "", Parent = null, SourcePos = -1 };
+        ICodeBlock root = new CodeBlock() { Name = "Declaration", Code = "", Parent = container, SourcePos = -1 };
+        var data = testClass.NewData(root);
+        var tokens = new List<TokenData>
+        {
+            new("Target", CodeBlockType.Variable, 1, 1),
+            new(":=", CodeBlockType.Operation, 1, 8),
+            new("5", CodeBlockType.Number, 2, 11),
+        };
+
+        foreach (var token in tokens)
+        {
+            testClass.OnToken(token, data);
+        }
+
+        Assert.AreEqual(1, root.SubBlocks.Count);
+        Assert.IsInstanceOfType<IECCodeBlock>(root.SubBlocks[0]);
+        var assignment = (IECCodeBlock)root.SubBlocks[0];
+        Assert.AreEqual(CodeBlockType.Assignment, assignment.Type);
+        Assert.IsInstanceOfType<IecAssignmentStatement>(assignment.AstNode);
+
+        var typedAssignment = (IecAssignmentStatement)assignment.AstNode!;
+        Assert.AreEqual("Target", typedAssignment.Target.Identifier);
+        Assert.IsInstanceOfType<IecLiteralExpression>(typedAssignment.Value);
+        Assert.AreEqual(5, ((IecLiteralExpression)typedAssignment.Value).Value);
+    }
+
+    [TestMethod]
+    public void OnToken_Assignment_AttachesTypedFunctionCallAssignment()
+    {
+        var container = new CodeBlock() { Name = "Container", Code = "", Parent = null, SourcePos = -1 };
+        ICodeBlock root = new CodeBlock() { Name = "Declaration", Code = "", Parent = container, SourcePos = -1 };
+        var data = testClass.NewData(root);
+        var tokens = new List<TokenData>
+        {
+            new("Target", CodeBlockType.Variable, 1, 1),
+            new(":=", CodeBlockType.Operation, 1, 8),
+            new("rw_ABS", CodeBlockType.Function, 2, 11),
+            new("(", CodeBlockType.Bracket, 2, 17),
+            new("Input", CodeBlockType.Variable, 3, 18),
+            new(")", CodeBlockType.Bracket, 2, 23),
+        };
+
+        foreach (var token in tokens)
+        {
+            testClass.OnToken(token, data);
+        }
+
+        Assert.AreEqual(1, root.SubBlocks.Count);
+        Assert.IsInstanceOfType<IECCodeBlock>(root.SubBlocks[0]);
+        var assignment = (IECCodeBlock)root.SubBlocks[0];
+        Assert.IsInstanceOfType<IecAssignmentStatement>(assignment.AstNode);
+
+        var typedAssignment = (IecAssignmentStatement)assignment.AstNode!;
+        Assert.IsInstanceOfType<IecFunctionCallExpression>(typedAssignment.Value);
+
+        var functionCall = (IecFunctionCallExpression)typedAssignment.Value;
+        Assert.AreEqual("rw_ABS", functionCall.FunctionName);
+        Assert.AreEqual(1, functionCall.Arguments.Count);
+        Assert.IsInstanceOfType<IecIdentifierExpression>(functionCall.Arguments[0]);
+        Assert.AreEqual("Input", ((IecIdentifierExpression)functionCall.Arguments[0]).Identifier);
     }
 }
