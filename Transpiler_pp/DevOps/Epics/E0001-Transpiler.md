@@ -3,6 +3,12 @@
 ## Description
 The Transpiler is a tool that converts code from one programming language to another. It allows developers to write code in their preferred language and then transpile it to a different language for execution. This can be particularly useful for projects that require compatibility with multiple platforms or for developers who want to leverage the strengths of different programming languages.
 
+## Architecture Direction
+- The framework is AST-first as its primary architectural principle
+- A shared, language-independent AST and semantic core should mediate between source-language frontends and target-language backends
+- Language projects such as IEC, CSharp, Pascal, DriveBASIC, Basic, and C++ should act as frontends, backends, or language-specific optimization layers rather than owning the shared semantic model
+- Backend-specific optimization should remain separated from the shared semantic representation where practical
+
 ## Objectives
 - Develop a transpiler that supports at least two programming languages (e.g., JavaScript to Python).
 - Ensure that the transpiled code maintains the same functionality as the original code.
@@ -21,4 +27,5 @@ The Transpiler is a tool that converts code from one programming language to ano
 - Optimization techniques to improve the performance of the transpiled code.
 - Comprehensive documentation and examples to guide users through the transpilation process.
 - Integration with popular development environments (e.g., Visual Studio Code, JetBrains IDEs) for seamless workflow integration.
+- A shared AST and semantic pipeline that enables language-independent transpilation stages across multiple frontends and backends.
 

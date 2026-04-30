@@ -10,6 +10,7 @@ This feature covers the staged implementation path for transforming IEC code int
 - Define the implementation roadmap for IEC parsing, semantics, execution, and C# generation
 - Prioritize testability-oriented architecture decisions
 - Establish backlog items for incremental delivery
+- Align the IEC-to-C# path with the repository-wide AST-first framework direction
 
 ## Out of Scope
 - Full IEC 61131-3 language coverage in a single increment
@@ -29,6 +30,7 @@ This feature covers the staged implementation path for transforming IEC code int
 - The current IEC implementation already provides a useful starting point through scanner, code builder, and initial interpreter support
 - Testability is the main acceptance driver for the next implementation increments
 - A staged delivery model is preferred over broad language coverage
+- The IEC path is the first concrete slice of a broader AST-first, language-independent transpiler framework
 
 ## Open Questions
 - Which IEC source format is the primary input target for the next milestone
@@ -39,3 +41,4 @@ This feature covers the staged implementation path for transforming IEC code int
 - Create individual backlog items for each roadmap increment
 - Detail B0001 as the first implementation-ready item
 - Align the first item with existing `TranspilerLib.IEC` tests and project structure
+- Keep new IEC/C# work consistent with the shared semantics extraction and backend-consumer direction

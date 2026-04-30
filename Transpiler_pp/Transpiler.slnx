@@ -55,6 +55,8 @@
     <Project Path="TranspilerLib.IEC/TranspilerLib.IEC.csproj" />
     <Project Path="TranspilerLib.Pascal.Tests/TranspilerLib.Pascal.Tests.csproj" />
     <Project Path="TranspilerLib.Pascal/TranspilerLib.Pascal.csproj" />
+    <Project Path="TranspilerLib.Semantics.Tests/TranspilerLib.Semantics.Tests.csproj" />
+    <Project Path="TranspilerLib.Semantics/TranspilerLib.Semantics.csproj" />
     <Project Path="TranspilerLib/TranspilerLib.csproj" />
     <Project Path="TranspilerLibTests/TranspilerLibTests.csproj" />
     <Project Path="Trnsp.Show.Lfm.Tests/Trnsp.Show.Lfm.Tests.csproj" />

@@ -11,8 +11,19 @@
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)**\*.md" Exclude="$(MSBuildThisFileDirectory)bin\**;$(MSBuildThisFileDirectory)obj\**;$(MSBuildThisFileDirectory).vs\**" />
     <None Include="$(MSBuildThisFileDirectory)BacklogItems\B0005-IEC-Semantic-Analysis.md" />
+    <None Include="$(MSBuildThisFileDirectory)BacklogItems\B0008-Shared-Transpiler-Semantics.md" />
     <None Include="$(MSBuildThisFileDirectory)Data\**\*.*" Exclude="$(MSBuildThisFileDirectory)bin\**;$(MSBuildThisFileDirectory)obj\**;$(MSBuildThisFileDirectory).vs\**" />
     <None Include="$(MSBuildThisFileDirectory)Features\F0001-IEC-to-CSharp-Testability.md" />
     <None Include="$(MSBuildThisFileDirectory)Tasks\T0001-B0001-Detail-Typed-IEC-AST.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0002-B0008-Transition-CSharp-Backend-To-Shared-Semantics.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0003-B0006-Configurable-CSharp-Backend-Output.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0004-B0006-CSharp-Backend-Artifact-Roles.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0005-B0008-Shared-Artifact-Metadata.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0006-B0008-Shared-Wrapper-Traits.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0007-B0008-Artifact-Metadata-Object.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0008-B0008-Declaration-Metadata-Object.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0009-B0008-General-Metadata-Base.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0010-B0008-Physical-Semantics-Source-Ownership.md" />
+    <None Include="$(MSBuildThisFileDirectory)Tasks\T0011-B0008-Semantics-Test-Project.md" />
   </ItemGroup>
 </Project>
