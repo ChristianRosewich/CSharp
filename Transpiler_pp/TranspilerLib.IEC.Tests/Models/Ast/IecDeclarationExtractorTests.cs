@@ -26,6 +26,44 @@ public class IecDeclarationExtractorTests
     }
 
     [TestMethod]
+    public void ExtractDeclarations_StoresDeclarationMetadata()
+    {
+        var declarations = IecDeclarationExtractor.ExtractDeclarations("VAR_INPUT\nInput : LREAL := 1.5;\nEND_VAR");
+        var declaration = declarations.Single();
+
+        Assert.AreEqual(IecDeclarationSection.Input, declaration.DeclarationMetadata.Section);
+        Assert.AreEqual("1.5", declaration.DeclarationMetadata.InitializerText);
+    }
+
+    [TestMethod]
+    public void ExtractDeclarations_ReadsOutputSection()
+    {
+        var declarations = IecDeclarationExtractor.ExtractDeclarations("VAR_OUTPUT\nResult : BOOL;\nEND_VAR");
+        var declaration = declarations.Single();
+
+        Assert.AreEqual(IecDeclarationSection.Output, declaration.Section);
+        Assert.AreEqual("Result", declaration.Identifier);
+        Assert.AreEqual("BOOL", declaration.TypeName);
+    }
+
+    [TestMethod]
+    public void ExtractDeclarations_SkipsDeclaration_WithMissingIdentifier()
+    {
+        var declarations = IecDeclarationExtractor.ExtractDeclarations("VAR\n: LREAL;\nValid : INT;\nEND_VAR");
+
+        Assert.AreEqual(1, declarations.Count);
+        Assert.AreEqual("Valid", declarations.Single().Identifier);
+    }
+
+    [TestMethod]
+    public void DeclarationMetadata_InheritsSharedMetadataBase()
+    {
+        IecMetadata metadata = new IecDeclarationMetadata(IecDeclarationSection.Input, "1.5");
+
+        Assert.IsInstanceOfType<IecDeclarationMetadata>(metadata);
+    }
+
+    [TestMethod]
     public void CreateCompilationUnit_Builds_SymbolTable_From_ExportDeclarations()
     {
         var fixture = IecExportFixtureData.LoadMfComputeAlignmentRot();
@@ -42,5 +80,14 @@ public class IecDeclarationExtractorTests
         Assert.IsNotNull(axisVelTargetDeclaration);
         Assert.AreEqual(IecDeclarationSection.Instance, axisVelTargetDeclaration.Section);
         Assert.AreEqual("LREAL", axisVelTargetDeclaration.TypeName);
+    }
+
+    [TestMethod]
+    public void CreateCompilationUnit_UsesEmptyStatements_ForCurrentImplementation()
+    {
+        var compilationUnit = IecDeclarationExtractor.CreateCompilationUnit("VAR\nValue : INT;\nEND_VAR", "Value := 1;");
+
+        Assert.AreEqual(1, compilationUnit.Declarations.Count);
+        Assert.AreEqual(0, compilationUnit.Statements.Count);
     }
 }

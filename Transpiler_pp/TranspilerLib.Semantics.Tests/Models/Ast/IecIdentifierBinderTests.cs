@@ -65,4 +65,43 @@ public class IecIdentifierBinderTests
         Assert.AreEqual(1, result.UnresolvedIdentifiers.Count, "The export-based binding should currently leave external runtime identifiers unresolved.");
         Assert.AreEqual("lrCycleTime", result.UnresolvedIdentifiers.Single().Identifier);
     }
+
+    [TestMethod]
+    public void Bind_TraversesIfBranchesReturnStatementsAndFunctionArguments()
+    {
+        var compilationUnit = new IecCompilationUnit(
+        [
+            new IecVariableDeclaration("Flag", "BOOL", IecDeclarationSection.Input),
+            new IecVariableDeclaration("Target", "INT", IecDeclarationSection.Local),
+            new IecVariableDeclaration("Input", "INT", IecDeclarationSection.Input),
+            new IecVariableDeclaration("Memory", "INT", IecDeclarationSection.InOut),
+        ],
+        [
+            new IecIfStatement(
+                new IecIdentifierExpression("Flag"),
+                [
+                    new IecAssignmentStatement(
+                        new IecIdentifierExpression("Target"),
+                        new IecFunctionCallExpression(
+                            "Custom",
+                            [
+                                new IecUnaryExpression(IecUnaryOperator.Negate, new IecIdentifierExpression("Input")),
+                                new IecBinaryExpression(
+                                    new IecIdentifierExpression("Memory"),
+                                    IecBinaryOperator.Add,
+                                    new IecIdentifierExpression("Missing")),
+                            ]))
+                ],
+                [new IecReturnStatement(new IecIdentifierExpression("Memory"))])
+        ]);
+
+        var result = IecIdentifierBinder.Bind(compilationUnit);
+
+        Assert.IsTrue(result.Bindings.Any(binding => binding.Key.Identifier == "Flag"));
+        Assert.IsTrue(result.Bindings.Any(binding => binding.Key.Identifier == "Target"));
+        Assert.IsTrue(result.Bindings.Any(binding => binding.Key.Identifier == "Input"));
+        Assert.AreEqual(2, result.Bindings.Count(binding => binding.Key.Identifier == "Memory"));
+        Assert.AreEqual(1, result.UnresolvedIdentifiers.Count);
+        Assert.AreEqual("Missing", result.UnresolvedIdentifiers.Single().Identifier);
+    }
 }

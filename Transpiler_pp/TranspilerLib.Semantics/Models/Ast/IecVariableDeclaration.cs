@@ -1,7 +1,5 @@
 namespace TranspilerLib.IEC.Models.Ast;
 
-using System.Collections.Generic;
-
 /// <summary>
 /// Represents a typed IEC variable declaration.
 /// The first AST slice keeps the declaration model intentionally small and focuses on the
@@ -18,12 +16,23 @@ public sealed class IecVariableDeclaration : IecAstNode
     /// <param name="initializerText">The raw initializer text when it exists.</param>
     /// <param name="sourcePos">Zero-based source position or a negative value when unknown.</param>
     public IecVariableDeclaration(string identifier, string? typeName = null, IecDeclarationSection section = IecDeclarationSection.Unknown, string? initializerText = null, int sourcePos = -1)
+        : this(identifier, typeName, new IecDeclarationMetadata(section, initializerText), sourcePos)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="IecVariableDeclaration"/> class with explicit declaration metadata.
+    /// </summary>
+    /// <param name="identifier">The declared variable name.</param>
+    /// <param name="typeName">The declared IEC type name.</param>
+    /// <param name="declarationMetadata">The shared declaration metadata.</param>
+    /// <param name="sourcePos">Zero-based source position or a negative value when unknown.</param>
+    public IecVariableDeclaration(string identifier, string? typeName, IecDeclarationMetadata? declarationMetadata, int sourcePos = -1)
         : base(sourcePos)
     {
         Identifier = identifier;
         TypeName = typeName;
-        Section = section;
-        InitializerText = initializerText;
+        DeclarationMetadata = declarationMetadata ?? new IecDeclarationMetadata();
     }
 
     /// <summary>
@@ -37,12 +46,17 @@ public sealed class IecVariableDeclaration : IecAstNode
     public string? TypeName { get; }
 
     /// <summary>
+    /// Gets the shared declaration metadata.
+    /// </summary>
+    public IecDeclarationMetadata DeclarationMetadata { get; }
+
+    /// <summary>
     /// Gets the declaration section that contains the variable.
     /// </summary>
-    public IecDeclarationSection Section { get; }
+    public IecDeclarationSection Section => DeclarationMetadata.Section;
 
     /// <summary>
     /// Gets the raw initializer text when one exists in the declaration.
     /// </summary>
-    public string? InitializerText { get; }
+    public string? InitializerText => DeclarationMetadata.InitializerText;
 }
