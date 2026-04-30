@@ -14,7 +14,7 @@ public class IecAstNodeTests
             new IecLiteralExpression(5, 18),
             10);
 
-        var unit = new IecCompilationUnit([declaration], [statement], 1);
+        var unit = new IecCompilationUnit([declaration], [statement], sourcePos: 1);
 
         Assert.AreEqual(1, unit.SourcePos);
         Assert.AreEqual(1, unit.Declarations.Count);
@@ -52,5 +52,27 @@ public class IecAstNodeTests
         Assert.IsInstanceOfType<IecIdentifierExpression>(expression.Left);
         Assert.IsInstanceOfType<IecUnaryExpression>(expression.Right);
         Assert.AreEqual(5, expression.SourcePos);
+    }
+
+    [TestMethod]
+    public void Declaration_ExposesSourcePosition()
+    {
+        var declaration = new IecVariableDeclaration("Value", "INT", sourcePos: 42);
+
+        Assert.AreEqual(42, declaration.SourcePos);
+    }
+
+    [TestMethod]
+    public void SymbolTable_ExposesIndexedSymbols()
+    {
+        var symbolTable = new IecSymbolTable(
+        [
+            new IecVariableDeclaration("Value", "INT"),
+            new IecVariableDeclaration("Other", "BOOL"),
+        ]);
+
+        Assert.AreEqual(2, symbolTable.Symbols.Count);
+        Assert.IsTrue(symbolTable.Symbols.ContainsKey("Value"));
+        Assert.AreEqual("BOOL", symbolTable.Symbols["Other"].TypeName);
     }
 }
