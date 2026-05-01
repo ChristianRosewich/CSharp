@@ -45,6 +45,80 @@ public sealed class GenealogicalNameTokenBuilderTests
     }
 
     [TestMethod]
+    public void BuildNameToken_AppendsProtectSpaceMarkerAndAdvancesOffset()
+    {
+        var warnings = new List<string>();
+        var sut = new GenealogicalNameTokenBuilder(CreateConfiguration(warnings));
+        var offset = 1;
+        var charCount = 2;
+        var subString = string.Empty;
+
+        var result = sut.BuildNameToken(" Anna", ref offset, ref charCount, ref subString, out var additional);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(" ", subString);
+        Assert.AreEqual(0, charCount);
+        Assert.AreEqual(1, offset);
+        Assert.AreEqual(string.Empty, additional);
+        Assert.AreEqual(0, warnings.Count);
+    }
+
+    [TestMethod]
+    public void BuildNameToken_PreservesUppercaseHyphenatedName()
+    {
+        var warnings = new List<string>();
+        var sut = new GenealogicalNameTokenBuilder(CreateConfiguration(warnings));
+        var offset = 4;
+        var charCount = 3;
+        var subString = "Eva";
+
+        var result = sut.BuildNameToken("Eva-Maria", ref offset, ref charCount, ref subString, out var additional);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual("Eva-", subString);
+        Assert.AreEqual(0, charCount);
+        Assert.AreEqual(string.Empty, additional);
+        Assert.AreEqual(0, warnings.Count);
+    }
+
+    [TestMethod]
+    public void BuildNameToken_IgnoresSoftHyphenBetweenLowerCaseLetters()
+    {
+        var warnings = new List<string>();
+        var sut = new GenealogicalNameTokenBuilder(CreateConfiguration(warnings));
+        var offset = 3;
+        var charCount = 2;
+        var subString = "an";
+
+        var result = sut.BuildNameToken("an­na", ref offset, ref charCount, ref subString, out var additional);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual("an", subString);
+        Assert.AreEqual(0, charCount);
+        Assert.AreEqual(4, offset);
+        Assert.AreEqual(string.Empty, additional);
+        Assert.AreEqual(0, warnings.Count);
+    }
+
+    [TestMethod]
+    public void BuildNameToken_TransformsUmlautMarker()
+    {
+        var warnings = new List<string>();
+        var sut = new GenealogicalNameTokenBuilder(CreateConfiguration(warnings));
+        var offset = 1;
+        var charCount = 0;
+        var subString = string.Empty;
+
+        var result = sut.BuildNameToken("ä", ref offset, ref charCount, ref subString, out var additional);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual("ä", subString);
+        Assert.AreEqual(1, charCount);
+        Assert.AreEqual(string.Empty, additional);
+        Assert.AreEqual(0, warnings.Count);
+    }
+
+    [TestMethod]
     public void BuildName_WithTwinAdditional_AppendsTwinData()
     {
         var warnings = new List<string>();
@@ -82,6 +156,26 @@ public sealed class GenealogicalNameTokenBuilderTests
         Assert.AreEqual("genannt Bubi", aka);
         Assert.AreEqual(ParserEventType.evt_AKA, addEvent);
         Assert.AreEqual(0, charCount);
+    }
+
+    [TestMethod]
+    public void BuildName_WithExistingTwinData_AppendsTwinMarkerText()
+    {
+        var warnings = new List<string>();
+        var sut = new GenealogicalNameTokenBuilder(CreateConfiguration(warnings));
+        var offset = 1;
+        var subString = string.Empty;
+        var data = "Hinweis";
+        var charCount = 0;
+        string? aka = null;
+        var addEvent = ParserEventType.evt_Anull;
+
+        var result = sut.BuildName("(Zw)", ref offset, ref subString, ref data, ref charCount, ref aka, ref addEvent);
+
+        Assert.IsFalse(result);
+        Assert.AreEqual("Hinweis; Zwilling", data);
+        Assert.IsNull(aka);
+        Assert.AreEqual(ParserEventType.evt_Anull, addEvent);
     }
 
     private static GenealogicalNameTokenBuilderConfiguration CreateConfiguration(List<string> warnings)

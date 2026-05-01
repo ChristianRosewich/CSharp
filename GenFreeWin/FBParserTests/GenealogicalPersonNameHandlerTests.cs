@@ -25,6 +25,31 @@ public sealed class GenealogicalPersonNameHandlerTests
         Assert.IsTrue(collector.FamilyMembers.Any(m => m.Reference == "123"));
     }
 
+    [TestMethod]
+    public void HandleAkPersonEntry_WithAkaStartingQuestion_AssignsLastNameFromAka()
+    {
+        var collector = new PersonNameHandlerCollector();
+        var sut = new GenealogicalPersonNameHandler(CreateConfiguration(collector));
+
+        var id = sut.HandleAkPersonEntry("Anna", "123", 'U', 5, out var lastName, out var personSex, "? Müller", "");
+
+        Assert.AreEqual("Müller", lastName);
+        Assert.IsTrue(collector.Names.Any(n => n.Reference == id && n.Data.Contains("Müller")));
+        Assert.IsTrue(collector.FamilyMembers.Any(m => m.Reference == "123"));
+    }
+
+    [TestMethod]
+    public void HandleAkPersonEntry_WithMaidenName_SetsFamilyTypeAndUsesMaidenSurname()
+    {
+        var collector = new PersonNameHandlerCollector();
+        var sut = new GenealogicalPersonNameHandler(CreateConfiguration(collector));
+
+        var id = sut.HandleAkPersonEntry("Anna Müller geb. Schmidt", "123", 'U', 5, out var lastName, out var personSex);
+
+        Assert.AreEqual("Schmidt", lastName);
+        Assert.IsTrue(collector.FamilyTypes.Any(f => f.Reference == "123" && f.SubType == 1));
+    }
+
     private static GenealogicalPersonNameHandlerConfiguration CreateConfiguration(PersonNameHandlerCollector collector)
         => new()
         {

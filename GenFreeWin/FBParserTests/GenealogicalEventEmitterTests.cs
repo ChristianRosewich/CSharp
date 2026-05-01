@@ -34,6 +34,19 @@ public sealed class GenealogicalEventEmitterTests
     }
 
     [TestMethod]
+    public void SetIndiPlace_WithInvalidPlace_ReportsErrorAndStillEmitsPlace()
+    {
+        var collector = new EventEmitterCollector();
+        var sut = new GenealogicalEventEmitter(CreateConfiguration(collector));
+
+        sut.SetIndiPlace("I1", ParserEventType.evt_Residence, "berlin");
+
+        Assert.AreEqual(1, collector.Errors.Count);
+        Assert.AreEqual(1, collector.IndiPlaces.Count);
+        Assert.AreEqual(new ParseResult("ParserIndiPlace", "berlin", "I1", (int)ParserEventType.evt_Residence), collector.IndiPlaces[0]);
+    }
+
+    [TestMethod]
     public void SetIndiRelat_WithZeroReferenceOutsideMainRef_ReportsErrorAndStillEmitsRelation()
     {
         var collector = new EventEmitterCollector();

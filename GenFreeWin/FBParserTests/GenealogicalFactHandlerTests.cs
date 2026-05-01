@@ -30,6 +30,72 @@ public sealed class GenealogicalFactHandlerTests
     }
 
     [TestMethod]
+    public void HandleNonPersonEntry_WithLeadingArticleOnly_StripsArticleBeforeOccupation()
+    {
+        var collector = new FactHandlerCollector();
+        var sut = new GenealogicalFactHandler(CreateConfiguration(collector, CreateArticleOccupationAnalyseEntry()));
+
+        var result = sut.HandleNonPersonEntry("ein Schneider", "I61M", "Bern");
+
+        Assert.AreEqual(ParserEventType.evt_Occupation, result);
+        CollectionAssert.AreEqual(
+        new List<ParseResult>
+        {
+            new("ParserIndiOccu", "Schneider", "I61M", (int)ParserEventType.evt_Occupation),
+            new("ParserIndiPlace", "Bern", "I61M", (int)ParserEventType.evt_Occupation),
+        },
+        collector.Results.ToList());
+    }
+
+    [TestMethod]
+    public void HandleNonPersonEntry_WithDateOnlyOccupation_Warns()
+    {
+        var collector = new FactHandlerCollector();
+        var sut = new GenealogicalFactHandler(CreateConfiguration(collector, CreateDateOnlyAnalyseEntry()));
+
+        var result = sut.HandleNonPersonEntry("1900", "I61M", "Bern");
+
+        Assert.AreEqual(ParserEventType.evt_Occupation, result);
+        CollectionAssert.AreEqual(
+        new List<ParseResult>
+        {
+            new("ParserIndiDate", "1900", "I61M", (int)ParserEventType.evt_Occupation),
+            new("ParserIndiPlace", "Bern", "I61M", (int)ParserEventType.evt_Occupation),
+        },
+        collector.Results.ToList());
+        CollectionAssert.AreEqual(new List<string> { "Entry contains no Marker, only a Date" }, collector.Warnings);
+    }
+
+    [TestMethod]
+    public void HandleFamilyFact_IgnoresEmptyEntry()
+    {
+        var collector = new FactHandlerCollector();
+        var sut = new GenealogicalFactHandler(CreateConfiguration(collector, CreateFamilyFallbackAnalyseEntry()));
+
+        sut.HandleFamilyFact("123", ".");
+
+        Assert.AreEqual(0, collector.Results.Count);
+    }
+
+    [TestMethod]
+    public void HandleFamilyFact_WithDateDataAndPlace_EmitsStructuredFamilyFact()
+    {
+        var collector = new FactHandlerCollector();
+        var sut = new GenealogicalFactHandler(CreateConfiguration(collector, CreateStructuredFamilyAnalyseEntry()));
+
+        sut.HandleFamilyFact("123", "⚭ 12.03.1900 in Bern");
+
+        CollectionAssert.AreEqual(
+        new List<ParseResult>
+        {
+            new("ParserFamilyDate", "12.03.1900", "123", (int)ParserEventType.evt_Marriage),
+            new("ParserFamilyPlace", "Bern", "123", (int)ParserEventType.evt_Marriage),
+            new("ParserFamilyData", "Hinweis", "123", (int)ParserEventType.evt_Marriage),
+        },
+        collector.Results.ToList());
+    }
+
+    [TestMethod]
     public void HandleNonPersonEntry_WithLedigOnlyAfterOccupation_EmitsOccupationPlaceThenDescription()
     {
         var collector = new FactHandlerCollector();
@@ -131,6 +197,36 @@ public sealed class GenealogicalFactHandlerTests
             place = "Bern";
             date = string.Empty;
             subString = "Unbekannte Angabe";
+        };
+
+    private static AnalyseEntryDelegate CreateArticleOccupationAnalyseEntry()
+        => static (ref string subString, out ParserEventType entryType, out string data, out string place, out string date) =>
+        {
+            entryType = ParserEventType.evt_Last;
+            data = string.Empty;
+            place = "Bern";
+            date = string.Empty;
+            subString = "ein Schneider";
+        };
+
+    private static AnalyseEntryDelegate CreateDateOnlyAnalyseEntry()
+        => static (ref string subString, out ParserEventType entryType, out string data, out string place, out string date) =>
+        {
+            entryType = ParserEventType.evt_Last;
+            data = string.Empty;
+            place = "Bern";
+            date = "1900";
+            subString = string.Empty;
+        };
+
+    private static AnalyseEntryDelegate CreateStructuredFamilyAnalyseEntry()
+        => static (ref string subString, out ParserEventType entryType, out string data, out string place, out string date) =>
+        {
+            entryType = ParserEventType.evt_Marriage;
+            data = "Hinweis";
+            place = "Bern";
+            date = "12.03.1900";
+            subString = "⚭ 12.03.1900 in Bern";
         };
 
     private static string StubHandleAkPersonEntry(string personEntry, string mainFamRef, char personType, int mode, out string lastName, out char personSex, string aka = "", string famName = "")
