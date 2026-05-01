@@ -7,6 +7,15 @@ namespace FBParserTests;
 public sealed class PascalCompatTests
 {
     [TestMethod]
+    public void HasCharAt_ValidatesOneBasedBounds()
+    {
+        Assert.IsTrue(PascalCompat.HasCharAt("abc", 1));
+        Assert.IsTrue(PascalCompat.HasCharAt("abc", 3));
+        Assert.IsFalse(PascalCompat.HasCharAt("abc", 0));
+        Assert.IsFalse(PascalCompat.HasCharAt("abc", 4));
+    }
+
+    [TestMethod]
     [DataRow("abcdef", 1, 3, "abc")]
     [DataRow("abcdef", 4, 10, "def")]
     [DataRow("abcdef", 7, 1, "")]
@@ -49,6 +58,7 @@ public sealed class PascalCompatTests
         Assert.AreEqual("def", PascalCompat.RemoveStart("abcdef", 3));
         Assert.AreEqual(string.Empty, PascalCompat.RemoveStart("abcdef", 10));
         Assert.AreEqual("abcdef", PascalCompat.RemoveStart("abcdef", 0));
+        Assert.AreEqual(string.Empty, PascalCompat.RemoveStart(string.Empty, 3));
     }
 
     [TestMethod]

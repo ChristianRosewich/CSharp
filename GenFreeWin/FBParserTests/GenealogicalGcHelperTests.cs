@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using FBParser;
 using FBParser.Analysis;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -29,6 +30,26 @@ public sealed class GenealogicalGcHelperTests
     }
 
     [TestMethod]
+    public void HandleGcDateEntry_RecognizesMissingKeyword()
+    {
+        var collector = new GcHelperCollector();
+        var sut = new GenealogicalGcHelper(CreateConfiguration(collector));
+        var position = 1;
+        var mode = 112;
+        var retMode = 0;
+        var eventType = ParserEventType.evt_Anull;
+
+        var result = sut.HandleGcDateEntry("vermisst", ref position, "I1M", ref mode, ref retMode, ref eventType);
+
+        Assert.IsTrue(result);
+        Assert.AreEqual(101, mode);
+        Assert.AreEqual(112, retMode);
+        Assert.AreEqual(ParserEventType.evt_Death, eventType);
+        Assert.AreEqual(1, collector.IndiData.Count);
+        Assert.AreEqual(new ParseResult("ParserIndiData", "vermisst", "I1M", (int)ParserEventType.evt_Death), collector.IndiData[0]);
+    }
+
+    [TestMethod]
     public void HandleGcNonPersonEntry_MapsReligionEntry()
     {
         var collector = new GcHelperCollector();
@@ -42,12 +63,52 @@ public sealed class GenealogicalGcHelperTests
     }
 
     [TestMethod]
+    public void HandleGcNonPersonEntry_MapsTitleWithPlace()
+    {
+        var collector = new GcHelperCollector();
+        var sut = new GenealogicalGcHelper(CreateConfiguration(collector));
+
+        var result = sut.HandleGcNonPersonEntry("Graf in Bern", ',', "I1M");
+
+        Assert.IsTrue(result);
+        CollectionAssert.AreEqual(
+        new List<ParseResult>
+        {
+            new("ParserIndiName", "Graf", "I1M", 4),
+            new("ParserIndiPlace", "Bern", "I1M", (int)ParserEventType.evt_Occupation),
+        },
+        new List<ParseResult>(collector.IndiNames.Concat(collector.IndiPlaces)));
+    }
+
+    [TestMethod]
     public void ScanForEventDate_ExtractsChildEventDate()
     {
         var collector = new GcHelperCollector();
         var sut = new GenealogicalGcHelper(CreateConfiguration(collector));
 
         var result = sut.ScanForEventDate("prefix Kd: * 12.03.1900 suffix", 1);
+
+        Assert.AreEqual(" 12.03.1900 ", result);
+    }
+
+    [TestMethod]
+    public void ScanForEventDate_HandlesDeathAndBirthMarkers()
+    {
+        var collector = new GcHelperCollector();
+        var sut = new GenealogicalGcHelper(CreateConfiguration(collector));
+
+        var result = sut.ScanForEventDate("prefix Kd: †* 12.03.1900 suffix", 1);
+
+        Assert.AreEqual(" 12.03.1900 ", result);
+    }
+
+    [TestMethod]
+    public void ScanForEventDate_SkipsNameTextWithUmlautBeforeDate()
+    {
+        var collector = new GcHelperCollector();
+        var sut = new GenealogicalGcHelper(CreateConfiguration(collector));
+
+        var result = sut.ScanForEventDate("prefix Kd: Mädchen * 12.03.1900 suffix", 1);
 
         Assert.AreEqual(" 12.03.1900 ", result);
     }
