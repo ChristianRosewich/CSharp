@@ -206,6 +206,7 @@
     <File Path="Tools/WinFormsDesignerCompat_AutoEvents.csx" />
     <Project Path="../Transpiler_pp/TranspilerLib.CSharp/TranspilerLib.CSharp.csproj" />
     <Project Path="../Transpiler_pp/TranspilerLib.Pascal/TranspilerLib.Pascal.csproj" />
+    <Project Path="../Transpiler_pp/TranspilerLib.Semantics/TranspilerLib.Semantics.csproj" />
     <Project Path="../Transpiler_pp/TranspilerLib/TranspilerLib.csproj" />
     <Project Path="VBUnObfusicator/VBUnObfusicator.csproj" />
     <Project Path="VBUnObfusicatorTests/VBUnObfusicatorTests.csproj" />
