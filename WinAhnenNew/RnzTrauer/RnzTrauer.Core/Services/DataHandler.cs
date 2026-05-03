@@ -1,4 +1,10 @@
+using Db.Core.Abstractions.Sql.Interfaaces;
+using RnzTrauer.Core.Services.Interfaces;
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -98,8 +104,8 @@ public sealed class DataHandler : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="DataHandler"/> class.
     /// </summary>
-    public DataHandler(DatabaseSettings xSettings, IFile xFile)
-        : this(new TrauerDataRepository(xSettings), xFile)
+    public DataHandler(IDbConnectionFactory _icf, DatabaseSettings xSettings, IFile xFile)
+        : this(new TrauerDataRepository(_icf, xSettings), xFile)
     {
     }
 
