@@ -37,6 +37,50 @@ public sealed class SvnCliProviderSyncDirectoryTests
         }
     }
 
+    [TestMethod]
+    public void SyncDirectory_AppliesDifferentialPatchWithoutOverwritingUnchangedFile()
+    {
+        var sRootPath = Path.Combine(Path.GetTempPath(), "RepoMigrator.Tests", Guid.NewGuid().ToString("N"));
+        var sSourcePath = Path.Combine(sRootPath, "source");
+        var sDestPath = Path.Combine(sRootPath, "dest");
+        Directory.CreateDirectory(sSourcePath);
+        Directory.CreateDirectory(sDestPath);
+
+        try
+        {
+            var sSourceSameFilePath = Path.Combine(sSourcePath, "same.txt");
+            var sDestSameFilePath = Path.Combine(sDestPath, "same.txt");
+            File.WriteAllText(sSourceSameFilePath, "same-content");
+            File.WriteAllText(sDestSameFilePath, "same-content");
+
+            var dtOldWriteTime = DateTimeOffset.UtcNow.AddDays(-2);
+            File.SetLastWriteTimeUtc(sDestSameFilePath, dtOldWriteTime.UtcDateTime);
+
+            File.WriteAllText(Path.Combine(sSourcePath, "changed.txt"), "new-value");
+            File.WriteAllText(Path.Combine(sDestPath, "changed.txt"), "old-value");
+
+            File.WriteAllText(Path.Combine(sSourcePath, "added.txt"), "added");
+            File.WriteAllText(Path.Combine(sDestPath, "removed.txt"), "remove-me");
+
+            Directory.CreateDirectory(Path.Combine(sDestPath, ".svn", "pristine"));
+            File.WriteAllText(Path.Combine(sDestPath, ".svn", "pristine", "keep.svn-base"), "metadata");
+
+            InvokeSyncDirectory(sSourcePath, sDestPath);
+
+            Assert.AreEqual("same-content", File.ReadAllText(sDestSameFilePath));
+            Assert.AreEqual(dtOldWriteTime.UtcDateTime, File.GetLastWriteTimeUtc(sDestSameFilePath));
+            Assert.AreEqual("new-value", File.ReadAllText(Path.Combine(sDestPath, "changed.txt")));
+            Assert.AreEqual("added", File.ReadAllText(Path.Combine(sDestPath, "added.txt")));
+            Assert.IsFalse(File.Exists(Path.Combine(sDestPath, "removed.txt")));
+            Assert.IsTrue(File.Exists(Path.Combine(sDestPath, ".svn", "pristine", "keep.svn-base")));
+        }
+        finally
+        {
+            if (Directory.Exists(sRootPath))
+                Directory.Delete(sRootPath, recursive: true);
+        }
+    }
+
     private static void InvokeSyncDirectory(string sSourcePath, string sDestPath)
     {
         var method = typeof(SvnCliProvider).GetMethod("SyncDirectory", BindingFlags.NonPublic | BindingFlags.Static);

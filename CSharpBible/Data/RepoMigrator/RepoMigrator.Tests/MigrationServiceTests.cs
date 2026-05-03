@@ -238,4 +238,62 @@ public sealed class MigrationServiceTests
         await targetProvider.Received().CommitSnapshotAsync(Arg.Any<string>(), Arg.Is<CommitMetadata>(metadata => metadata.Message == "Import 100"), Arg.Any<CancellationToken>());
         await targetProvider.Received().CommitSnapshotAsync(Arg.Any<string>(), Arg.Is<CommitMetadata>(metadata => metadata.Message == "Import 101"), Arg.Any<CancellationToken>());
     }
+
+    [TestMethod]
+    public async Task MigrateAsync_PipelinedExecution_ReportsCleanupWhenExportFails()
+    {
+        var providerFactory = Substitute.For<IProviderFactory>();
+        var enumerateProvider = Substitute.For<IVersionControlProvider>();
+        var exportProvider = Substitute.For<IVersionControlProvider>();
+        var targetProvider = Substitute.For<IVersionControlProvider>();
+        var progress = Substitute.For<IMigrationProgress>();
+        var service = new MigrationService(providerFactory);
+        var sourceEndpoint = new RepositoryEndpoint { Type = RepoType.Svn, UrlOrPath = "svn://source/repo" };
+        var targetEndpoint = new RepositoryEndpoint { Type = RepoType.Git, UrlOrPath = @"C:\target", BranchOrTrunk = "main" };
+        var query = new ChangeSetQuery();
+        var options = new MigrationOptions
+        {
+            ExecutionMode = MigrationExecutionMode.Pipelined,
+            PipelinePrefetchCount = 1,
+            PipelineExportWorkerCount = 1
+        };
+        var changeSet = new ChangeSetInfo
+        {
+            Id = "100",
+            Message = "Import",
+            AuthorName = "alice",
+            Timestamp = new DateTimeOffset(2024, 1, 1, 8, 0, 0, TimeSpan.Zero)
+        };
+
+        providerFactory.Create(RepoType.Svn).Returns(enumerateProvider, exportProvider);
+        providerFactory.Create(RepoType.Git).Returns(targetProvider);
+        enumerateProvider.Name.Returns("SVN");
+        exportProvider.Name.Returns("SVN");
+        targetProvider.Name.Returns("Git");
+        enumerateProvider.OpenAsync(sourceEndpoint, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        enumerateProvider.GetChangeSetsAsync(query, Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<ChangeSetInfo>>([changeSet]));
+        enumerateProvider.DisposeAsync().Returns(ValueTask.CompletedTask);
+        exportProvider.OpenAsync(sourceEndpoint, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        exportProvider.MaterializeSnapshotAsync(Arg.Any<string>(), changeSet.Id, Arg.Any<CancellationToken>())
+            .Returns(_ => throw new InvalidOperationException("Simulated export failure"));
+        exportProvider.DisposeAsync().Returns(ValueTask.CompletedTask);
+        targetProvider.InitializeTargetAsync(targetEndpoint, true, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        targetProvider.DisposeAsync().Returns(ValueTask.CompletedTask);
+
+        InvalidOperationException? ex = null;
+        try
+        {
+            await service.MigrateAsync(sourceEndpoint, targetEndpoint, query, options, progress, CancellationToken.None);
+            Assert.Fail("Expected InvalidOperationException.");
+        }
+        catch (InvalidOperationException caughtEx)
+        {
+            ex = caughtEx;
+        }
+
+        Assert.IsNotNull(ex);
+        StringAssert.Contains(ex.Message, "Simulated export failure");
+        progress.Received().Report(MigrationReportSeverity.Warning, MigrationReportMessage.PipelineCleanupStarting, Arg.Any<object?[]>());
+        await targetProvider.DidNotReceive().FlushAsync(Arg.Any<CancellationToken>());
+    }
 }

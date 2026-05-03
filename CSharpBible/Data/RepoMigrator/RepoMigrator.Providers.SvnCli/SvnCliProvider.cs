@@ -11,6 +11,7 @@ namespace RepoMigrator.Providers.SvnCli;
 
 public sealed class SvnCliProvider : IVersionControlProvider
 {
+    private static Func<RepositoryEndpoint?, string, string?, CancellationToken, Task<string>> s_runSvnCommandAsync = RunSvnProcessAsync;
     private RepositoryEndpoint? _endpoint;
     private string? _wcPath;
 
@@ -284,12 +285,12 @@ public sealed class SvnCliProvider : IVersionControlProvider
     }
 
     private async Task<string> RunSvnAsync(string args, string? workingDir, CancellationToken ct)
+        => await s_runSvnCommandAsync(_endpoint, args, workingDir, ct);
+
+    private static async Task<string> RunSvnProcessAsync(RepositoryEndpoint? endpoint, string args, string? workingDir, CancellationToken ct)
     {
-        // Credentials anhängen, falls vorhanden
-        if (_endpoint?.Credentials is { Username: not null } cred)
-        {
+        if (endpoint?.Credentials is { Username: not null } cred)
             args += $" --username \"{cred.Username}\" --password \"{cred.Password ?? ""}\" --non-interactive --trust-server-cert";
-        }
 
         var psi = new ProcessStartInfo
         {
@@ -390,44 +391,53 @@ public sealed class SvnCliProvider : IVersionControlProvider
     {
         Directory.CreateDirectory(dest);
 
-        // Löschen von Dateien/Ordnern, die es im Source nicht mehr gibt (ausgenommen .svn)
-        var srcFiles = Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)
-            .Where(src => !IsSvnAdministrativePath(source, src))
-            .Select(p => p[(source.Length)..].TrimStart(Path.DirectorySeparatorChar))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var file in Directory.EnumerateFiles(dest, "*", SearchOption.AllDirectories))
-        {
-            if (IsSvnAdministrativePath(dest, file))
-                continue;
-            var rel = file[(dest.Length)..].TrimStart(Path.DirectorySeparatorChar);
-            if (!srcFiles.Contains(rel))
+        var dctSourceFiles = Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)
+            .Where(sPath => !IsSvnAdministrativePath(source, sPath))
+            .Select(sPath => new
             {
-                TryMakeWritable(file);
-                File.Delete(file);
+                RelativePath = Path.GetRelativePath(source, sPath),
+                FullPath = sPath,
+                Info = new FileInfo(sPath)
+            })
+            .ToDictionary(file => file.RelativePath, file => (FullPath: file.FullPath, Info: file.Info), StringComparer.OrdinalIgnoreCase);
+
+        var dctDestFiles = Directory.EnumerateFiles(dest, "*", SearchOption.AllDirectories)
+            .Where(sPath => !IsSvnAdministrativePath(dest, sPath))
+            .Select(sPath => new
+            {
+                RelativePath = Path.GetRelativePath(dest, sPath),
+                FullPath = sPath,
+                Info = new FileInfo(sPath)
+            })
+            .ToDictionary(file => file.RelativePath, file => (FullPath: file.FullPath, Info: file.Info), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kvpDestinationFile in dctDestFiles)
+        {
+            var sRelativePath = kvpDestinationFile.Key;
+            var destinationFile = kvpDestinationFile.Value;
+            if (dctSourceFiles.ContainsKey(sRelativePath))
+                continue;
+
+            TryMakeWritable(destinationFile.FullPath);
+            File.Delete(destinationFile.FullPath);
+        }
+
+        foreach (var kvpSourceFile in dctSourceFiles)
+        {
+            var sRelativePath = kvpSourceFile.Key;
+            var sourceFile = kvpSourceFile.Value;
+            var sDestinationPath = Path.Combine(dest, sRelativePath);
+            if (dctDestFiles.TryGetValue(sRelativePath, out var destinationFile)
+                && AreFilesContentEqual(sourceFile.FullPath, destinationFile.FullPath, sourceFile.Info.Length, destinationFile.Info.Length))
+            {
+                continue;
             }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(sDestinationPath)!);
+            File.Copy(sourceFile.FullPath, sDestinationPath, overwrite: true);
         }
 
-        // Leere Verzeichnisse ggf. entfernen (ohne .svn)
-        foreach (var dir in Directory.EnumerateDirectories(dest, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
-        {
-            if (IsSvnAdministrativePath(dest, dir))
-                continue;
-            if (!Directory.EnumerateFileSystemEntries(dir).Any())
-                Directory.Delete(dir, false);
-        }
-
-        // Kopieren/Aktualisieren
-        foreach (var src in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-        {
-            if (IsSvnAdministrativePath(source, src))
-                continue;
-
-            var rel = src[(source.Length)..].TrimStart(Path.DirectorySeparatorChar);
-            var dst = Path.Combine(dest, rel);
-            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-            File.Copy(src, dst, true);
-        }
+        RemoveEmptyDirectories(dest);
     }
 
     private static bool IsSvnAdministrativePath(string sRootPath, string sCandidatePath)
@@ -443,6 +453,50 @@ public sealed class SvnCliProvider : IVersionControlProvider
         return arrSegments.Any(sSegment => string.Equals(sSegment, ".svn", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool AreFilesContentEqual(string sSourcePath, string sDestinationPath, long iSourceLength, long iDestinationLength)
+    {
+        if (iSourceLength != iDestinationLength)
+            return false;
+
+        if (iSourceLength == 0)
+            return true;
+
+        const int iBufferSize = 128 * 1024;
+        var arrSourceBuffer = new byte[iBufferSize];
+        var arrDestinationBuffer = new byte[iBufferSize];
+
+        using var sourceStream = new FileStream(sSourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var destinationStream = new FileStream(sDestinationPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        while (true)
+        {
+            var iReadSource = sourceStream.Read(arrSourceBuffer, 0, arrSourceBuffer.Length);
+            var iReadDestination = destinationStream.Read(arrDestinationBuffer, 0, arrDestinationBuffer.Length);
+
+            if (iReadSource != iReadDestination)
+                return false;
+
+            if (iReadSource == 0)
+                return true;
+
+            if (!arrSourceBuffer.AsSpan(0, iReadSource).SequenceEqual(arrDestinationBuffer.AsSpan(0, iReadDestination)))
+                return false;
+        }
+    }
+
+    private static void RemoveEmptyDirectories(string sRootDirectory)
+    {
+        foreach (var sDirectory in Directory.EnumerateDirectories(sRootDirectory, "*", SearchOption.AllDirectories)
+            .OrderByDescending(static sValue => sValue.Length))
+        {
+            if (IsSvnAdministrativePath(sRootDirectory, sDirectory))
+                continue;
+
+            if (!Directory.EnumerateFileSystemEntries(sDirectory).Any())
+                Directory.Delete(sDirectory, recursive: false);
+        }
+    }
+
     private static void TryMakeWritable(string path)
     {
         try
@@ -451,7 +505,9 @@ public sealed class SvnCliProvider : IVersionControlProvider
             if (attr.HasFlag(FileAttributes.ReadOnly))
                 File.SetAttributes(path, attr & ~FileAttributes.ReadOnly);
         }
-        catch { /* ignore */ }
+        catch
+        {
+        }
     }
 
     private static string? ExtractCommittedRevision(string commitOutput)
