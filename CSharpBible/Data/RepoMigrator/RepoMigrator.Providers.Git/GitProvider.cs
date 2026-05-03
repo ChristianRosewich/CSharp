@@ -9,6 +9,7 @@ namespace RepoMigrator.Providers.Git;
 
 public sealed class GitProvider : IVersionControlProvider
 {
+    private static Func<string, string?, string, CancellationToken, Task<string>> s_runGitCommandAsync = RunGitProcessAsync;
     private RepositoryEndpoint? _endpoint;
     private string? _localPath; // Lokales Arbeitsrepo für Quelle und/oder Ziel
     private string? _pushTargetUrl;
@@ -708,6 +709,9 @@ public sealed class GitProvider : IVersionControlProvider
             : endpoint.Credentials.Username!;
 
     private static async Task<string> RunGitAsync(string arguments, string? workingDir, string operationName, CancellationToken ct)
+        => await s_runGitCommandAsync(arguments, workingDir, operationName, ct);
+
+    private static async Task<string> RunGitProcessAsync(string arguments, string? workingDir, string operationName, CancellationToken ct)
     {
         var psi = new ProcessStartInfo
         {
@@ -785,30 +789,101 @@ public sealed class GitProvider : IVersionControlProvider
 
     private static void SyncDirectoryContents(string sourceDir, string destDir)
     {
-        // 1) Dateien löschen, die nicht mehr existieren
-        var sourceAll = Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories)
-            .Select(p => p.Substring(sourceDir.Length).TrimStart(Path.DirectorySeparatorChar))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var dstFile in Directory.EnumerateFiles(destDir, "*", SearchOption.AllDirectories))
-        {
-            var rel = dstFile.Substring(destDir.Length).TrimStart(Path.DirectorySeparatorChar);
-            if (rel.StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!sourceAll.Contains(rel))
+        var dctSourceFiles = Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories)
+            .Select(sFilePath => new
             {
-                File.SetAttributes(dstFile, FileAttributes.Normal);
-                File.Delete(dstFile);
-            }
+                RelativePath = Path.GetRelativePath(sourceDir, sFilePath),
+                FullPath = sFilePath,
+                Info = new FileInfo(sFilePath)
+            })
+            .ToDictionary(file => file.RelativePath, file => (file.FullPath, file.Info), StringComparer.OrdinalIgnoreCase);
+
+        var dctDestFiles = Directory.EnumerateFiles(destDir, "*", SearchOption.AllDirectories)
+            .Select(sFilePath => new
+            {
+                RelativePath = Path.GetRelativePath(destDir, sFilePath),
+                FullPath = sFilePath,
+                Info = new FileInfo(sFilePath)
+            })
+            .Where(file => !IsGitAdministrativePath(file.RelativePath))
+            .ToDictionary(file => file.RelativePath, file => (file.FullPath, file.Info), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sRelativePath, destinationFile) in dctDestFiles)
+        {
+            if (dctSourceFiles.ContainsKey(sRelativePath))
+                continue;
+
+            destinationFile.Info.Attributes = FileAttributes.Normal;
+            destinationFile.Info.Delete();
         }
 
-        // 2) Dateien kopieren/überschreiben
-        foreach (var srcFile in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+        foreach (var (sRelativePath, sourceFile) in dctSourceFiles)
         {
-            var rel = srcFile.Substring(sourceDir.Length).TrimStart(Path.DirectorySeparatorChar);
-            var dst = Path.Combine(destDir, rel);
-            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-            File.Copy(srcFile, dst, overwrite: true);
+            var sDestinationPath = Path.Combine(destDir, sRelativePath);
+            if (dctDestFiles.TryGetValue(sRelativePath, out var destinationFile)
+                && AreFilesContentEqual(sourceFile.FullPath, destinationFile.FullPath, sourceFile.Info.Length, destinationFile.Info.Length))
+            {
+                continue;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(sDestinationPath)!);
+            File.Copy(sourceFile.FullPath, sDestinationPath, overwrite: true);
+        }
+
+        RemoveEmptyDirectories(destDir);
+    }
+
+    private static bool AreFilesContentEqual(string sSourcePath, string sDestinationPath, long iSourceLength, long iDestinationLength)
+    {
+        if (iSourceLength != iDestinationLength)
+            return false;
+
+        if (iSourceLength == 0)
+            return true;
+
+        const int iBufferSize = 128 * 1024;
+        var arrSourceBuffer = new byte[iBufferSize];
+        var arrDestinationBuffer = new byte[iBufferSize];
+
+        using var sourceStream = new FileStream(sSourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var destinationStream = new FileStream(sDestinationPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        while (true)
+        {
+            var iReadSource = sourceStream.Read(arrSourceBuffer, 0, arrSourceBuffer.Length);
+            var iReadDestination = destinationStream.Read(arrDestinationBuffer, 0, arrDestinationBuffer.Length);
+
+            if (iReadSource != iReadDestination)
+                return false;
+
+            if (iReadSource == 0)
+                return true;
+
+            if (!arrSourceBuffer.AsSpan(0, iReadSource).SequenceEqual(arrDestinationBuffer.AsSpan(0, iReadDestination)))
+                return false;
+        }
+    }
+
+    private static bool IsGitAdministrativePath(string sRelativePath)
+    {
+        var sNormalizedPath = sRelativePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        if (string.Equals(sNormalizedPath, ".git", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return sNormalizedPath.StartsWith($".git{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RemoveEmptyDirectories(string sRootDirectory)
+    {
+        foreach (var sDirectory in Directory.EnumerateDirectories(sRootDirectory, "*", SearchOption.AllDirectories)
+            .OrderByDescending(static sValue => sValue.Length))
+        {
+            var sRelativePath = Path.GetRelativePath(sRootDirectory, sDirectory);
+            if (IsGitAdministrativePath(sRelativePath))
+                continue;
+
+            if (!Directory.EnumerateFileSystemEntries(sDirectory).Any())
+                Directory.Delete(sDirectory, recursive: false);
         }
     }
 }

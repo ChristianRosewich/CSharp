@@ -1,6 +1,7 @@
 using LibGit2Sharp;
 using RepoMigrator.Core;
 using RepoMigrator.Providers.Git;
+using System.Reflection;
 
 namespace RepoMigrator.Tests;
 
@@ -100,5 +101,38 @@ public sealed class GitProviderTests
 
         Assert.IsNotNull(ex);
         StringAssert.Contains(ex.Message, "Git target path must not be empty.");
+    }
+
+    [TestMethod]
+    public async Task FlushAsync_WhenNoPushTargetConfigured_CompletesWithoutError()
+    {
+        await using var provider = new GitProvider();
+
+        await provider.FlushAsync(CancellationToken.None);
+    }
+
+    [TestMethod]
+    public async Task RunGitAsync_WhenCommandFails_ThrowsInvalidOperationException()
+    {
+        var method = typeof(GitProvider).GetMethod("RunGitAsync", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(method);
+
+        var task = (Task<string>)method.Invoke(null, new object?[]
+        {
+            "__copilot_invalid_git_command__",
+            null,
+            "Git-Test-Operation",
+            CancellationToken.None
+        })!;
+
+        try
+        {
+            await task;
+            Assert.Fail("Expected InvalidOperationException.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Assert.IsFalse(string.IsNullOrWhiteSpace(ex.Message));
+        }
     }
 }
