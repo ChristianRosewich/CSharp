@@ -23,6 +23,9 @@
     </Project>
     <Project Path="DAO/Interop.DAO.csproj" />
     <Project Path="DAO/Interop.DAO_win.csproj" />
+    <Project Path="DbCoreAbstractions.UnitTests/DbCoreAbstractions.UnitTests.csproj" Id="d6d81c12-e930-4dc7-906a-5b9c8ae0e227" />
+    <Project Path="DbCoreAbstractions/DbCoreAbstractions.csproj" />
+    <Project Path="DbProviderMySql/DbProviderMySql.csproj" />
     <Project Path="MdbBrowser/MdbBrowser.csproj" />
     <Project Path="MdbBrowserTests/MdbBrowserTests.csproj" />
     <Project Path="mdbTool/mdbTool.csproj" />
@@ -193,6 +196,8 @@
     <Project Path="../WinAhnenNew/RnzTrauer/RnzTrauer.Console/RnzTrauer.Console.csproj" />
     <Project Path="../WinAhnenNew/RnzTrauer/RnzTrauer.Core/RnzTrauer.Core.csproj" />
     <Project Path="../WinAhnenNew/RnzTrauer/RnzTrauer.Tests/RnzTrauer.Tests.csproj" />
+    <Project Path="../WinAhnenNew/RnzTrauer/RnzTrauer.WebDriver.Edge/RnzTrauer.WebDriver.Edge.csproj" />
+    <Project Path="../WinAhnenNew/RnzTrauer/RnzTrauer.WebDriver.Firefox/RnzTrauer.WebDriver.Firefox.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
