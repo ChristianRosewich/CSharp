@@ -29,6 +29,8 @@
 		<Folder Include="Properties\" />
 	</ItemGroup>
 	<ItemGroup>
+   <ProjectReference Include="..\DbCoreAbstractions\DbCoreAbstractions.csproj" />
+		<ProjectReference Include="..\GenDBImplOLEDB\GenDBImplOLEDB.csproj" />
 		<ProjectReference Include="..\..\CSharpBible\Libraries\MVVM_BaseLib\MVVM_BaseLib.csproj" />
 		<ProjectReference Condition="$(TargetFramework.StartsWith('net4'))" Include="..\..\CSharpBible\Libraries\CommonDialogs\CommonDialogs.csproj" />
 		<ProjectReference Condition="!$(TargetFramework.StartsWith('net4'))" Include="..\..\CSharpBible\Libraries\CommonDialogs\CommonDialogs_net.csproj" />
