@@ -1,4 +1,4 @@
-namespace RnzTrauer.Core;
+namespace RnzTrauer.Core.Services.Interfaces;
 
 /// <summary>
 /// Provides JSON-based configuration loading for the ported tools.

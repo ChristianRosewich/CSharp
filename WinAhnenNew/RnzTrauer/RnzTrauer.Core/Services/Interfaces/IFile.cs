@@ -1,4 +1,4 @@
-namespace RnzTrauer.Core;
+namespace RnzTrauer.Core.Services.Interfaces;
 
 /// <summary>
 /// Provides an abstraction over <see cref="File"/> for testable file-system access.

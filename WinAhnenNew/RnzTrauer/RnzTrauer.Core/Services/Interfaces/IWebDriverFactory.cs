@@ -1,6 +1,6 @@
 using OpenQA.Selenium;
 
-namespace RnzTrauer.Core;
+namespace RnzTrauer.Core.Services.Interfaces;
 
 /// <summary>
 /// Creates Selenium web driver instances.

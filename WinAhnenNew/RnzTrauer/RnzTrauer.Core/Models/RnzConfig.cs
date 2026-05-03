@@ -1,3 +1,6 @@
+using RnzTrauer.Core.Services.Interfaces;
+using System;
+
 namespace RnzTrauer.Core;
 
 /// <summary>
@@ -21,6 +24,11 @@ public sealed class RnzConfig : DatabaseSettings
     {
         _xConfigLoader = xConfigLoader ?? throw new ArgumentNullException(nameof(xConfigLoader));
     }
+
+    /// <summary>
+    /// Gets or sets the Selenium browser engine used for scraping.
+    /// </summary>
+    public BrowserType Browser { get; set; } = BrowserType.Firefox;
 
     /// <summary>
     /// Gets or sets the login URL.

@@ -1,4 +1,7 @@
-namespace RnzTrauer.Core;
+using System;
+using System.Collections.Generic;
+
+namespace RnzTrauer.Core.Services.Interfaces;
 
 /// <summary>
 /// Defines the database operations required for loading and persisting RNZ obituary data.

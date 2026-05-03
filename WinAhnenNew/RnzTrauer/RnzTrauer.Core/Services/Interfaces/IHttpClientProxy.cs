@@ -1,4 +1,8 @@
-namespace RnzTrauer.Core;
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+namespace RnzTrauer.Core.Services.Interfaces;
 
 /// <summary>
 /// Provides an abstraction over <see cref="HttpClient"/> for testable HTTP access.
