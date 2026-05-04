@@ -25,7 +25,7 @@ namespace Db.Provider.MySql
                 Server = xSettings[nameof(MySqlConnectionStringBuilder.Server)].ToString(),
                 Port = (uint?)xSettings[nameof(MySqlConnectionStringBuilder.Port)] ?? 3306,
                 UserID = xSettings[nameof(MySqlConnectionStringBuilder.UserID)].ToString(),
-                Password = xSettings[nameof(MySqlConnectionStringBuilder.Password)].ToString(),
+                Password = xSettings[nameof(MySqlConnectionStringBuilder.Password)]?.ToString() ?? "",
                 Database = xSettings[nameof(MySqlConnectionStringBuilder.Database)].ToString(),
                 AllowUserVariables = true,
                 ConvertZeroDateTime = true
@@ -36,15 +36,22 @@ namespace Db.Provider.MySql
 
         public IDBSettings CreateSettingsStub()
         {
-            return
-                 (IDBSettings)(new Dictionary<string, object>()
-                 {
-                     [nameof(MySqlConnectionStringBuilder.Server)] = "",
-                     [nameof(MySqlConnectionStringBuilder.Port)] = 3306,
-                     [nameof(MySqlConnectionStringBuilder.UserID)] = "",
-                     [nameof(MySqlConnectionStringBuilder.Password)] = "",
-                     [nameof(MySqlConnectionStringBuilder.Database)] = ""
-                 });
+            return new MySqlDbSettings
+            {
+                [nameof(MySqlConnectionStringBuilder.Server)] = string.Empty,
+                [nameof(MySqlConnectionStringBuilder.Port)] = 3306u,
+                [nameof(MySqlConnectionStringBuilder.UserID)] = string.Empty,
+                [nameof(MySqlConnectionStringBuilder.Password)] = string.Empty,
+                [nameof(MySqlConnectionStringBuilder.Database)] = string.Empty
+            };
+        }
+
+
+        /// <summary>
+        /// Lightweight settings wrapper so dictionary values can be returned as <see cref="IDBSettings"/>.
+        /// </summary>
+        private sealed class MySqlDbSettings : Dictionary<string, object>, IDBSettings
+        {
         }
 
         /// <inheritdoc />

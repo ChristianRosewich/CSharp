@@ -20,7 +20,7 @@ namespace Db.Provider.MySql
                 throw new ArgumentNullException(nameof(xStatement));
             }
 
-            var sFields = xStatement.Fields.Count == 0 ? "*" : string.Join(",", xStatement.Fields.Select(QuoteIdentifier));
+            var sFields = xStatement.Fields.Count == 0 || (xStatement.Fields.Count == 1 && xStatement.Fields[0] == "*")  ? "*" : string.Join(",", xStatement.Fields.Select(QuoteIdentifier));
             var xBuilder = new StringBuilder($"SELECT {sFields} FROM {QuoteIdentifier(xStatement.Table)}");
             AppendFilters(xBuilder, xStatement.Filters);
             if (xStatement.Limit.HasValue)
