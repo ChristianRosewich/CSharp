@@ -34,7 +34,7 @@ public sealed class TrauerDataRepository : ITrauerDataRepository
         ArgumentNullException.ThrowIfNull(xSettings);
 
         var dbSettings = xConnectionFactory.CreateSettingsStub();
-        dbSettings["Seerver"] = xSettings.DBhost;
+        dbSettings["Server"] = xSettings.DBhost;
         dbSettings["UserID"] = xSettings.DBuser;
         dbSettings["Password"] = xSettings.DBpass;
         dbSettings["Database"] = xSettings.DB;
