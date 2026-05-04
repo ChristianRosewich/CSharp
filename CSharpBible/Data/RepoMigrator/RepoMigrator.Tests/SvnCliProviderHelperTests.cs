@@ -1,5 +1,6 @@
 using System.Reflection;
 using RepoMigrator.Providers.SvnCli;
+using System.Xml.Linq;
 
 namespace RepoMigrator.Tests;
 
@@ -14,6 +15,32 @@ public sealed class SvnCliProviderHelperTests
         var arrMissing = InvokeParseMissingFromStatus(sStatusOutput).ToArray();
 
         CollectionAssert.AreEqual(new[] { "src/old.cs", "docs" }, arrMissing);
+    }
+
+    [TestMethod]
+    public void ParseMissingFromStatusXml_ReturnsMissingAndObstructedEntries_WithUnicodePath()
+    {
+        var sStatusXml =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+            "<status>\n" +
+            "  <target path=\".\">\n" +
+            "    <entry path=\"Multimedia\\data\\Für Elise.fmk\">\n" +
+            "      <wc-status item=\"missing\" />\n" +
+            "    </entry>\n" +
+            "    <entry path=\"Multimedia\\data\">\n" +
+            "      <wc-status item=\"obstructed\" />\n" +
+            "    </entry>\n" +
+            "    <entry path=\"Multimedia\\data\\keep.txt\">\n" +
+            "      <wc-status item=\"modified\" />\n" +
+            "    </entry>\n" +
+            "  </target>\n" +
+            "</status>\n";
+
+        var arrMissing = InvokeParseMissingFromStatusXml(sStatusXml).ToArray();
+
+        CollectionAssert.AreEqual(
+            new[] { "Multimedia\\data\\Für Elise.fmk", "Multimedia\\data" },
+            arrMissing);
     }
 
     [TestMethod]
@@ -36,11 +63,31 @@ public sealed class SvnCliProviderHelperTests
         Assert.AreEqual("a\\\"b\\\"c", sActual);
     }
 
+    [TestMethod]
+    [DataRow("Multimedia\\data", "Multimedia/data")]
+    [DataRow("/Multimedia/data/", "Multimedia/data")]
+    [DataRow("Multimedia/data", "Multimedia/data")]
+    public void NormalizeSvnPath_NormalizesSeparatorsAndTrimsOuterSlashes(string sInput, string sExpected)
+    {
+        var sActual = InvokeNormalizeSvnPath(sInput);
+
+        Assert.AreEqual(sExpected, sActual);
+    }
+
     private static IEnumerable<string> InvokeParseMissingFromStatus(string sStatusOutput)
     {
         var method = typeof(SvnCliProvider).GetMethod("ParseMissingFromStatus", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.IsNotNull(method);
         var result = method.Invoke(null, new object[] { sStatusOutput }) as IEnumerable<string>;
+        Assert.IsNotNull(result);
+        return result;
+    }
+
+    private static IEnumerable<string> InvokeParseMissingFromStatusXml(string sStatusXml)
+    {
+        var method = typeof(SvnCliProvider).GetMethod("ParseMissingFromStatusXml", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(method);
+        var result = method.Invoke(null, new object[] { sStatusXml }) as IEnumerable<string>;
         Assert.IsNotNull(result);
         return result;
     }
@@ -57,5 +104,12 @@ public sealed class SvnCliProviderHelperTests
         var method = typeof(SvnCliProvider).GetMethod("EscapeProp", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.IsNotNull(method);
         return (string)method.Invoke(null, new object[] { sValue })!;
+    }
+
+    private static string InvokeNormalizeSvnPath(string sPath)
+    {
+        var method = typeof(SvnCliProvider).GetMethod("NormalizeSvnPath", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(method);
+        return (string)method.Invoke(null, new object[] { sPath })!;
     }
 }

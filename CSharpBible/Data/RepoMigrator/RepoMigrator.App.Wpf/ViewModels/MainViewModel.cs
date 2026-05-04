@@ -332,10 +332,10 @@ public partial class MainViewModel : ObservableObject, IMigrationProgress
             var q = CreateChangeSetQuery();
             var options = CreateMigrationOptions();
 
+            await _migration.MigrateAsync(sourceEndpoint, targetEndpoint, q, options, this, ct);
+
             CaptureRecentSourceInputs();
             CaptureRecentTargetInputs();
-
-            await _migration.MigrateAsync(sourceEndpoint, targetEndpoint, q, options, this, ct);
         }, workflowStageOnStart: WorkflowStage.Execution, workflowStageOnFinish: WorkflowStage.Options);
     }
 
@@ -652,21 +652,15 @@ public partial class MainViewModel : ObservableObject, IMigrationProgress
 
     private static void SyncRecentValues(ObservableCollection<string> lstTargetCollection, IReadOnlyList<string> lstValues)
     {
-        for (var iIndex = 0; iIndex < lstValues.Count; iIndex++)
+        var hsExistingValues = new HashSet<string>(lstTargetCollection, StringComparer.OrdinalIgnoreCase);
+        foreach (var sValue in lstValues)
         {
-            if (iIndex < lstTargetCollection.Count)
-            {
-                if (!string.Equals(lstTargetCollection[iIndex], lstValues[iIndex], StringComparison.Ordinal))
-                    lstTargetCollection[iIndex] = lstValues[iIndex];
-
+            if (string.IsNullOrWhiteSpace(sValue))
                 continue;
-            }
 
-            lstTargetCollection.Add(lstValues[iIndex]);
+            if (hsExistingValues.Add(sValue))
+                lstTargetCollection.Add(sValue);
         }
-
-        while (lstTargetCollection.Count > lstValues.Count)
-            lstTargetCollection.RemoveAt(lstTargetCollection.Count - 1);
     }
 
     private static void ApplyRecentValue(ObservableCollection<string> lstTargetCollection, string? sValue)

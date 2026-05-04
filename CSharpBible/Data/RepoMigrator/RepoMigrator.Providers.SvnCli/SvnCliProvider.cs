@@ -176,14 +176,30 @@ public sealed class SvnCliProvider : IVersionControlProvider
         await RunSvnAsync("add --force --parents .", workingDir: _wcPath, ct);
 
         // Fehlende löschen (Status analysieren)
-        var statusOutput = await RunSvnAsync("status", workingDir: _wcPath, ct);
-        var toDelete = ParseMissingFromStatus(statusOutput)
+        var statusOutput = await RunSvnAsync("status --xml", workingDir: _wcPath, ct);
+        var toDelete = ParseMissingFromStatusXml(statusOutput)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path.Count(c => c is '\\' or '/'))
             .ToList();
 
-        if (toDelete.Count > 0)
+        var filteredToDelete = new List<string>();
+        foreach (var candidate in toDelete)
+        {
+            var normalizedCandidate = NormalizeSvnPath(candidate);
+            var hasAncestor = filteredToDelete.Any(existing =>
+            {
+                var normalizedExisting = NormalizeSvnPath(existing);
+                return normalizedCandidate.StartsWith(normalizedExisting + "/", StringComparison.OrdinalIgnoreCase);
+            });
+
+            if (!hasAncestor)
+                filteredToDelete.Add(candidate);
+        }
+
+        if (filteredToDelete.Count > 0)
         {
             var targetsFile = Path.Combine(Path.GetTempPath(), $"svndelete_{Guid.NewGuid():N}.txt");
-            await File.WriteAllLinesAsync(targetsFile, toDelete, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), ct);
+            await File.WriteAllLinesAsync(targetsFile, filteredToDelete, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), ct);
             try
             {
                 await RunSvnAsync($"delete --force --targets \"{targetsFile}\"", workingDir: _wcPath, ct);
@@ -292,6 +308,10 @@ public sealed class SvnCliProvider : IVersionControlProvider
         if (endpoint?.Credentials is { Username: not null } cred)
             args += $" --username \"{cred.Username}\" --password \"{cred.Password ?? ""}\" --non-interactive --trust-server-cert";
 
+        var outputEncoding = args.Contains("--xml", StringComparison.OrdinalIgnoreCase)
+            ? Encoding.UTF8
+            : Encoding.Default;
+
         var psi = new ProcessStartInfo
         {
             FileName = "svn",
@@ -300,8 +320,8 @@ public sealed class SvnCliProvider : IVersionControlProvider
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
+            StandardOutputEncoding = outputEncoding,
+            StandardErrorEncoding = outputEncoding
         };
         if (!string.IsNullOrEmpty(workingDir))
             psi.WorkingDirectory = workingDir;
@@ -383,6 +403,28 @@ public sealed class SvnCliProvider : IVersionControlProvider
                 var rel = line.Length > 8 ? line[8..].Trim() : null;
                 if (!string.IsNullOrWhiteSpace(rel))
                     yield return rel!;
+            }
+        }
+    }
+
+    private static IEnumerable<string> ParseMissingFromStatusXml(string statusXml)
+    {
+        if (string.IsNullOrWhiteSpace(statusXml))
+            yield break;
+
+        var document = XDocument.Parse(statusXml);
+        var entries = document.Root?.Elements("target").Elements("entry") ?? Enumerable.Empty<XElement>();
+        foreach (var entry in entries)
+        {
+            var path = entry.Attribute("path")?.Value;
+            if (string.IsNullOrWhiteSpace(path))
+                continue;
+
+            var item = entry.Element("wc-status")?.Attribute("item")?.Value;
+            if (string.Equals(item, "missing", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item, "obstructed", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return path;
             }
         }
     }
@@ -530,4 +572,6 @@ public sealed class SvnCliProvider : IVersionControlProvider
 
     private static string EscapeProp(string s) => s.Replace("\"", "\\\"");
     private static void TryDeleteFile(string path) { try { if (File.Exists(path)) File.Delete(path); } catch { } }
+    private static string NormalizeSvnPath(string path)
+        => path.Replace('\\', '/').Trim('/');
 }

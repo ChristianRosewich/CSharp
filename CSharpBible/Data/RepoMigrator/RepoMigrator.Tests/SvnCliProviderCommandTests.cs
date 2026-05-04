@@ -128,8 +128,8 @@ public sealed class SvnCliProviderCommandTests
             if (arguments.StartsWith("info --show-item wc-root", StringComparison.Ordinal))
                 return Task.FromResult("C:/wc");
 
-            if (arguments.StartsWith("status", StringComparison.Ordinal))
-                return Task.FromResult("!       removed.txt\n");
+            if (arguments.StartsWith("status --xml", StringComparison.Ordinal))
+                return Task.FromResult("<status><target path=\".\"><entry path=\"removed.txt\"><wc-status item=\"missing\" /></entry></target></status>");
 
             if (arguments.StartsWith("commit ", StringComparison.Ordinal))
                 return Task.FromResult("Committed revision 123.\n");
