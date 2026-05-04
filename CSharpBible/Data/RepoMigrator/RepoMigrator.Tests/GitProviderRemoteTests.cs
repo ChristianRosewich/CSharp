@@ -10,6 +10,8 @@ namespace RepoMigrator.Tests;
 [DoNotParallelize]
 public sealed class GitProviderRemoteTests
 {
+    private static readonly object s_gitProviderPushSeamLock = new();
+
     [TestMethod]
     public async Task GetSelectionDataAsync_ForRemote_ParsesHeadBranchesAndTags()
     {
@@ -153,22 +155,132 @@ public sealed class GitProviderRemoteTests
         }
     }
 
+    [TestMethod]
+    public async Task CommitSnapshotAsync_WithRemoteTarget_SchedulesPushAfterEachRevision()
+    {
+        var sRootPath = Path.Combine(Path.GetTempPath(), "RepoMigrator.Tests", Guid.NewGuid().ToString("N"));
+        var sWorkPath = Path.Combine(sRootPath, "work");
+        Directory.CreateDirectory(sWorkPath);
+
+        var targetEndpoint = new RepositoryEndpoint
+        {
+            Type = RepoType.Git,
+            UrlOrPath = "https://example.org/target.git",
+            BranchOrTrunk = "main"
+        };
+
+        var pushCalls = new List<string>();
+
+        try
+        {
+            await WithGitCommandRunnerAndPushAsync(
+                runner: (_arguments, _workingDir, _operation, _ct) => Task.FromResult("ok"),
+                pushBranchAsync: (_provider, branchName, _ct) =>
+                {
+                    lock (pushCalls)
+                    {
+                        pushCalls.Add(branchName);
+                    }
+
+                    return Task.CompletedTask;
+                },
+                testAction: async () =>
+                {
+                    await using var provider = new GitProvider();
+                    await provider.InitializeTargetAsync(targetEndpoint, emptyInit: true, CancellationToken.None);
+
+                    File.WriteAllText(Path.Combine(sWorkPath, "a.txt"), "one");
+                    await provider.CommitSnapshotAsync(sWorkPath, new CommitMetadata
+                    {
+                        Message = "rev-1",
+                        AuthorName = "alice",
+                        AuthorEmail = "alice@example.org",
+                        Timestamp = DateTimeOffset.UtcNow,
+                        TargetBranch = "main"
+                    }, CancellationToken.None);
+
+                    File.WriteAllText(Path.Combine(sWorkPath, "a.txt"), "two");
+                    await provider.CommitSnapshotAsync(sWorkPath, new CommitMetadata
+                    {
+                        Message = "rev-2",
+                        AuthorName = "alice",
+                        AuthorEmail = "alice@example.org",
+                        Timestamp = DateTimeOffset.UtcNow,
+                        TargetBranch = "main"
+                    }, CancellationToken.None);
+
+                    for (var iAttempt = 0; iAttempt < 20; iAttempt++)
+                    {
+                        lock (pushCalls)
+                        {
+                            if (pushCalls.Count >= 2)
+                                break;
+                        }
+
+                        await Task.Delay(25);
+                    }
+
+                    lock (pushCalls)
+                    {
+                        Assert.AreEqual(2, pushCalls.Count);
+                        Assert.IsTrue(pushCalls.All(branch => string.Equals(branch, "main", StringComparison.Ordinal)));
+                    }
+
+                    await provider.FlushAsync(CancellationToken.None);
+
+                    lock (pushCalls)
+                    {
+                        Assert.AreEqual(2, pushCalls.Count);
+                    }
+                });
+        }
+        finally
+        {
+            TryDeleteDirectoryWithRetry(sRootPath);
+        }
+    }
+
     private static async Task WithGitCommandRunnerAsync(
         Func<string, string?, string, CancellationToken, Task<string>> runner,
         Func<Task> testAction)
     {
-        var field = typeof(GitProvider).GetField("s_runGitCommandAsync", BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.IsNotNull(field);
+        await WithGitCommandRunnerAndPushAsync(runner, null, testAction);
+    }
 
-        var previousRunner = (Func<string, string?, string, CancellationToken, Task<string>>)field.GetValue(null)!;
-        field.SetValue(null, runner);
+    private static async Task WithGitCommandRunnerAndPushAsync(
+        Func<string, string?, string, CancellationToken, Task<string>> runner,
+        Func<GitProvider, string, CancellationToken, Task>? pushBranchAsync,
+        Func<Task> testAction)
+    {
+        var runField = typeof(GitProvider).GetField("s_runGitCommandAsync", BindingFlags.NonPublic | BindingFlags.Static);
+        var pushField = typeof(GitProvider).GetField("s_pushBranchAsync", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(runField);
+        Assert.IsNotNull(pushField);
+
+        Func<string, string?, string, CancellationToken, Task<string>> previousRunner;
+        Func<GitProvider, string, CancellationToken, Task> previousPush;
+
+        lock (s_gitProviderPushSeamLock)
+        {
+            previousRunner = (Func<string, string?, string, CancellationToken, Task<string>>)runField.GetValue(null)!;
+            previousPush = (Func<GitProvider, string, CancellationToken, Task>)pushField.GetValue(null)!;
+
+            runField.SetValue(null, runner);
+            if (pushBranchAsync is not null)
+                pushField.SetValue(null, pushBranchAsync);
+        }
+
         try
         {
             await testAction();
         }
         finally
         {
-            field.SetValue(null, previousRunner);
+            lock (s_gitProviderPushSeamLock)
+            {
+                runField.SetValue(null, previousRunner);
+                pushField.SetValue(null, previousPush);
+            }
         }
     }
 

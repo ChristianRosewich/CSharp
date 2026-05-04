@@ -10,11 +10,14 @@ namespace RepoMigrator.Providers.Git;
 public sealed class GitProvider : IVersionControlProvider
 {
     private static Func<string, string?, string, CancellationToken, Task<string>> s_runGitCommandAsync = RunGitProcessAsync;
+    private static Func<GitProvider, string, CancellationToken, Task> s_pushBranchAsync = static (provider, branchName, ct)
+        => provider.PushBranchAsync(branchName, ct);
     private RepositoryEndpoint? _endpoint;
     private string? _localPath; // Lokales Arbeitsrepo für Quelle und/oder Ziel
     private string? _pushTargetUrl;
     private Repository? _repo;
     private readonly HashSet<string> _hsPendingPushBranchNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _pushSyncRoot = new();
     public string Name => "Git";
     public bool SupportsRead => true;
     public bool SupportsWrite => true;
@@ -387,22 +390,64 @@ public sealed class GitProvider : IVersionControlProvider
             var branchName = string.IsNullOrWhiteSpace(NormalizeBranchName(metadata.TargetBranch ?? endpoint.BranchOrTrunk))
                 ? _repo!.Head.FriendlyName
                 : NormalizeBranchName(metadata.TargetBranch ?? endpoint.BranchOrTrunk)!;
-            _hsPendingPushBranchNames.Add(branchName);
+            lock (_pushSyncRoot)
+            {
+                _hsPendingPushBranchNames.Add(branchName);
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await s_pushBranchAsync(this, branchName, CancellationToken.None);
+                    lock (_pushSyncRoot)
+                    {
+                        _hsPendingPushBranchNames.Remove(branchName);
+                    }
+                }
+                catch
+                {
+                    // FlushAsync übernimmt ggf. den erneuten Versuch und surfacet Fehler synchron am Ende.
+                }
+            });
         }
     }
 
     public async Task FlushAsync(CancellationToken ct)
     {
-        if (_pushTargetUrl is null || _hsPendingPushBranchNames.Count == 0)
+        if (_pushTargetUrl is null)
             return;
 
-        foreach (var sBranchName in _hsPendingPushBranchNames.OrderBy(static sValue => sValue, StringComparer.OrdinalIgnoreCase))
+        List<string> lstPendingBranches;
+        lock (_pushSyncRoot)
+        {
+            if (_hsPendingPushBranchNames.Count == 0)
+                return;
+
+            lstPendingBranches = _hsPendingPushBranchNames
+                .OrderBy(static sValue => sValue, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        foreach (var sBranchName in lstPendingBranches)
         {
             var sPushArgs = $"push --set-upstream \"{_pushTargetUrl}\" \"refs/heads/{sBranchName}:refs/heads/{sBranchName}\"";
             await RunGitAsync(sPushArgs, _localPath, "Git-Push", ct);
-        }
 
-        _hsPendingPushBranchNames.Clear();
+            lock (_pushSyncRoot)
+            {
+                _hsPendingPushBranchNames.Remove(sBranchName);
+            }
+        }
+    }
+
+    private async Task PushBranchAsync(string sBranchName, CancellationToken ct)
+    {
+        if (_pushTargetUrl is null)
+            return;
+
+        var sPushArgs = $"push --set-upstream \"{_pushTargetUrl}\" \"refs/heads/{sBranchName}:refs/heads/{sBranchName}\"";
+        await RunGitAsync(sPushArgs, _localPath, "Git-Push", ct);
     }
 
     public ValueTask DisposeAsync()
