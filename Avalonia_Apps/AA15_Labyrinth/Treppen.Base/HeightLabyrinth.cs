@@ -231,8 +231,14 @@ public sealed class HeightLabyrinth : IHeightLabyrinth
         var blv = BaseLevel(next.X, next.Y);
         if (!(canm1 || canz || canp1)) return false;
 
-        if (canp1 && (blv > ph || (!canz && (!canm1 || blv == ph)))) { height = ph + 1; return true; }
-        if (canm1 && (blv < ph || (!canz && (!canp1 || blv == ph)))) { height = ph - 1; return true; }
+        bool blvAbove = blv > ph;
+        bool blvBelow = blv < ph;
+        bool blvEqual = blv == ph;
+        bool preferPlusWhenNeutralBlocked = !canz && (!canm1 || blvEqual);
+        bool preferMinusWhenNeutralBlocked = !canz && (!canp1 || blvEqual);
+
+        if (canp1 && (blvAbove || preferPlusWhenNeutralBlocked)) { height = ph + 1; return true; }
+        if (canm1 && (blvBelow || preferMinusWhenNeutralBlocked)) { height = ph - 1; return true; }
         if (canz) { height = ph; return true; }
 
         return false;
