@@ -21,7 +21,7 @@
     <ProjectReference Include="..\TranspilerLibTests\TranspilerLibTests.csproj" />
   </ItemGroup>
 	<ItemGroup>
-		<PackageReference Include="coverlet.collector" Version="10.0.1">
+		<PackageReference Include="coverlet.collector" Version="10.1.0">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
@@ -30,11 +30,15 @@
 		<PackageReference Include="NSubstitute" Version="6.2.0" />
 	</ItemGroup>
 	<ItemGroup>
-		<Compile Remove="Resources\**" />
+	  <Compile Remove="Resources\**" />
 		<None Include="Resources\**" />
 		<Content Include="Resources\**">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
+	</ItemGroup>
+	<ItemGroup>
+	</ItemGroup>
+	<ItemGroup>
 	</ItemGroup>
 	<ItemGroup>
 		<Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />

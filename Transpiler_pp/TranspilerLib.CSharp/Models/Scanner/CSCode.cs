@@ -68,11 +68,7 @@ public partial class CSCode : CodeBase, ICSCode
     /// The constructor wires <see cref="CSTokenHandler"/> with <see cref="stringEndChars"/> and <see cref="ReservedWords"/>, 
     /// uses a <see cref="CSCodeBuilder"/> to construct block trees, and applies a default <c>CodeOptimizer</c> for structural clean-up.
     /// </remarks>
-    public CSCode() : this(new CSTokenHandler()
-    {
-        stringEndChars = stringEndChars,
-        reservedWords = ReservedWords
-    }, IoC.GetRequiredService<ICodeBuilder>(), IoC.GetRequiredService<ICodeOptimizer>())
+    public CSCode() : this(IoC.GetRequiredService<ITokenHandler>(), IoC.GetRequiredService<ICodeBuilder>(), IoC.GetRequiredService<ICodeOptimizer>())
     {
     }
 
@@ -94,22 +90,31 @@ public partial class CSCode : CodeBase, ICSCode
     /// </returns>
     /// <remarks>
     /// This method iteratively invokes the configured <see cref="ITokenHandler"/> states until the end of the input is reached.
-    /// Internally, tokens collected on a stack are reversed to preserve their semantic order before being yielded.
+    /// Tokens emitted by each handler are yielded in their original order before scanning continues.
     /// </remarks>
     public override IEnumerable<TokenData> Tokenize()
     {
+        if (tokenHandler is CSTokenHandler)
+        {
+            CSharpTokenizationResult result = CSharpLexer.Tokenize(OriginalCode);
+            if (result.Error is null)
+            {
+                foreach (TokenData token in result.Tokens)
+                    yield return token;
+                yield break;
+            }
+        }
+
         TokenizeData data = new();
-        Stack<TokenData> stack = new();
-        while (
-                data.Pos < OriginalCode.Length
-                && tokenHandler.TryGetValue(data.State, out var Handler))
+        List<TokenData> tokens = new();
+        while (data.Pos < OriginalCode.Length && tokenHandler.TryGetValue(data.State, out var Handler))
         {
             string debug = GetDebug(data, OriginalCode);
 
-            Handler?.Invoke(t => stack.Push(t), OriginalCode, data);
-            stack.Reverse();
-            while (stack.Count > 0)
-                yield return stack.Pop();
+            Handler?.Invoke(tokens.Add, OriginalCode, data);
+            foreach (var token in tokens)
+                yield return token;
+            tokens.Clear();
             data.Pos++;
         }
     }
@@ -124,10 +129,25 @@ public partial class CSCode : CodeBase, ICSCode
     /// </remarks>
     public override void Tokenize(TokenDelegate? token)
     {
-        TokenizeData data = new();
-        while (data.Pos < OriginalCode.Length && tokenHandler.TryGetValue(data.State, out var Handler))
+        if (tokenHandler is CSTokenHandler)
         {
-            //Debug:
+            CSharpTokenizationResult result = CSharpLexer.Tokenize(OriginalCode);
+            if (result.Error is null)
+            {
+                foreach (TokenData tokenData in result.Tokens)
+                    token?.Invoke(tokenData);
+                return;
+            }
+        }
+
+        TokenizeLegacy(tokenHandler, token);
+    }
+
+    private void TokenizeLegacy(ITokenHandler handler, TokenDelegate? token)
+    {
+        TokenizeData data = new();
+        while (data.Pos < OriginalCode.Length && handler.TryGetValue(data.State, out var Handler))
+        {
             string debug = GetDebug(data, OriginalCode);
             Handler?.Invoke(token, OriginalCode, data);
             data.Pos++;
@@ -151,8 +171,28 @@ public partial class CSCode : CodeBase, ICSCode
         ICodeBlock codeBlock = new CodeBlock() { Name = "Declaration", Type = CodeBlockType.MainBlock, Code = "", Parent = null };
         var data = codeBuilder.NewData(codeBlock);
 
-        if (values == null)
-            Tokenize((tokenData) => codeBuilder.OnToken(tokenData, data));
+        if (values == null && codeBuilder is CSCodeBuilder)
+        {
+            if (tokenHandler is CSTokenHandler)
+            {
+                TokenizeLegacy(tokenHandler, tokenData => codeBuilder.OnToken(tokenData, data));
+            }
+            else if (tokenHandler is CSTokenHandlerNew)
+            {
+                var streamedTokens = new List<TokenData>();
+                Tokenize(streamedTokens.Add);
+                foreach (TokenData combined in LegacyTokenCombiner.Combine(streamedTokens))
+                    codeBuilder.OnToken(combined, data);
+            }
+            else
+            {
+                Tokenize(tokenData => codeBuilder.OnToken(tokenData, data));
+            }
+        }
+        else if (values == null)
+        {
+            Tokenize(tokenData => codeBuilder.OnToken(tokenData, data));
+        }
         else
             foreach (var item in values)
             {
@@ -217,7 +257,7 @@ public partial class CSCode : CodeBase, ICSCode
     }
 
     /// <summary>
-    /// Simplifies labels that are referenced only from a single source (or at most two), recursively across the tree.
+    /// Simplifies labels that have executable goto sources, recursively across the tree.
     /// </summary>
     /// <param name="codeBlock">The root block to inspect and simplify.</param>
     /// <remarks>
@@ -226,22 +266,216 @@ public partial class CSCode : CodeBase, ICSCode
     /// </remarks>
     public void RemoveSingleSourceLabels1(ICodeBlock codeBlock)
     {
+        codeOptimizer.OptimizeIfChains(codeBlock);
+
         List<ICodeBlock> labels = new();
         foreach (var item in codeBlock.SubBlocks)
             if (item.Type is CodeBlockType.Label
-                && item.Sources.Count <= 2
-                && item.Sources.Count > 0
-                && !item.Code.StartsWith("case ")
-                && !item.Code.StartsWith("default:"))
+                   && CanBeOptimized(item))
                 labels.Add(item);
 
         foreach (var item in labels)
         {
             codeOptimizer.TestItem(item);
         }
+
         foreach (var item in codeBlock.SubBlocks.ToArray())
             if (item.SubBlocks.Count > 0)
                 RemoveSingleSourceLabels1(item);
+    }
+
+    private static bool CanBeOptimized(ICodeBlock item)
+    {
+        return  (item.Sources.Count <= 2
+                            || IsConditionalGotoChainTarget(item)
+                            || IsConsecutiveConditionalGotoBranchTarget(item)
+                            || IsSafeSwitchContinuationLabel(item)
+                            || IsSafeMultiSourceGotoReductionTarget(item))
+                        && item.Sources.Count > 0
+                        && !item.Code.StartsWith("case ")
+                        && !item.Code.StartsWith("default:");
+    }
+
+    /// <summary>
+    /// Determines whether a given label is the target of a conditional goto chain, which can be simplified.
+    /// </summary>
+    /// <param name="label">The label.</param>
+    /// <returns>
+    ///   <c>true</c> if [is conditional goto chain target] [the specified label]; otherwise, <c>false</c>.
+    /// </returns>
+    private static bool IsConditionalGotoChainTarget(ICodeBlock label)
+    {
+        if (label.Sources.Count < 3
+            || label.Prev is not ICodeBlock finalGoto
+            || finalGoto.Type != CodeBlockType.Goto
+            || !HasDestination(finalGoto, label)
+            || finalGoto.Prev is not ICodeBlock nearestIf
+            || !IsIfStatement(nearestIf)
+            || nearestIf.Prev is not ICodeBlock previousIf
+            || !IsIfStatement(previousIf))
+            return false;
+
+        return ContainsGotoTo(previousIf, label)
+            && previousIf.Prev is ICodeBlock outerIf
+            && IsIfStatement(outerIf)
+            && ContainsGotoTo(outerIf, label);
+    }
+
+    private static bool IsSafeMultiSourceGotoReductionTarget(ICodeBlock label)
+    {
+        if (label.Sources.Count <= 2
+            || label.Prev is not ICodeBlock finalGoto
+            || finalGoto.Type != CodeBlockType.Goto
+            || !HasDestination(finalGoto, label))
+            return false;
+
+        if (label.Parent is ICodeBlock switchBlock
+            && switchBlock.Type == CodeBlockType.Operation
+            && switchBlock.Code.TrimStart().StartsWith("switch", StringComparison.Ordinal))
+            return true;
+
+        return label.Sources
+            .Select(reference => reference.TryGetTarget(out var source) ? source : null)
+            .Where(source => source is not null)
+            .Cast<ICodeBlock>()
+            .Any(source => HasConditionalAncestorWithoutLoopOrSwitch(source));
+    }
+
+    private static bool IsConsecutiveConditionalGotoBranchTarget(ICodeBlock label)
+    {
+        foreach (var sourceReference in label.Sources)
+        {
+            if (!sourceReference.TryGetTarget(out var source))
+                continue;
+
+            for (var branch = source.Parent as ICodeBlock;
+                 branch is not null;
+                 branch = branch.Parent as ICodeBlock)
+            {
+                if (!IsIfStatement(branch)
+                    || branch.Parent is not ICodeBlock parent)
+                {
+                    continue;
+                }
+
+                var previous = branch.Prev;
+                var next = branch.Next;
+                if ((previous is not null && IsIfStatement(previous) && ContainsGotoTo(previous, label))
+                    || (next is not null && IsIfStatement(next) && ContainsGotoTo(next, label)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasConditionalAncestorWithoutLoopOrSwitch(ICodeBlock source)
+    {
+        var hasConditionalAncestor = false;
+        for (var current = source.Parent as ICodeBlock; current is not null; current = current.Parent as ICodeBlock)
+        {
+            var code = current.Code.TrimStart();
+            if (code.StartsWith("switch", StringComparison.Ordinal)
+                || code.StartsWith("while", StringComparison.Ordinal)
+                || code.StartsWith("for", StringComparison.Ordinal)
+                || code.StartsWith("do", StringComparison.Ordinal))
+                return false;
+
+            if (IsIfStatement(current))
+                hasConditionalAncestor = true;
+        }
+
+        return hasConditionalAncestor;
+    }
+
+    private static bool ContainsGotoTo(ICodeBlock block, ICodeBlock destination)
+    {
+        if (block.Type == CodeBlockType.Goto)
+            return HasDestination(block, destination);
+
+        return block.SubBlocks.Any(child => ContainsGotoTo(child, destination));
+    }
+
+    private static bool HasDestination(ICodeBlock block, ICodeBlock destination)
+    {
+        return block.Destination is not null
+            && block.Destination.TryGetTarget(out var target)
+            && target == destination;
+    }
+
+    private static bool IsIfStatement(ICodeBlock block)
+    {
+        return block.Type == CodeBlockType.Operation
+            && (block.Code.StartsWith("if ", StringComparison.Ordinal)
+                || block.Code.StartsWith("if(", StringComparison.Ordinal));
+    }
+
+    private static bool IsSafeSwitchContinuationLabel(ICodeBlock label)
+    {
+        if (label.Parent is not ICodeBlock parent
+            || label.Sources.Count <= 2)
+            return false;
+
+        var switchSources = label.Sources
+            .Select(reference => reference.TryGetTarget(out var source) ? source : null)
+            .Where(source => source is not null)
+            .Cast<ICodeBlock>()
+            .ToArray();
+
+        var switchCaseSources = switchSources
+            .Where(source => source.Parent is ICodeBlock switchBlock
+                && switchBlock.Code.TrimStart().StartsWith("switch", StringComparison.Ordinal)
+                && switchBlock.Parent == parent)
+            .ToArray();
+
+        if (switchCaseSources.Length < 2
+            || switchSources.Any(source => source.Parent is not ICodeBlock sourceParent
+                || (sourceParent != parent
+                    && (sourceParent.Code.TrimStart().StartsWith("switch", StringComparison.Ordinal)
+                        ? sourceParent.Parent != parent
+                        : true))
+                || (sourceParent != parent && !IsLastStatementOfSwitchCase(source)))
+            || switchCaseSources.Any(source => source.Parent is not ICodeBlock switchBlock
+                || !switchBlock.Code.TrimStart().StartsWith("switch", StringComparison.Ordinal)
+                || switchBlock.Parent != parent
+                || !IsLastStatementOfSwitchCase(source)))
+            return false;
+
+        for (var next = label.Prev; next is not null; next = next.Prev)
+        {
+            if (next.Type == CodeBlockType.Comment
+                || next.Type == CodeBlockType.LComment
+                || next.Type == CodeBlockType.FLComment
+                || next.Type == CodeBlockType.Block)
+                continue;
+
+            return next.Type == CodeBlockType.Goto
+                && HasDestination(next, label);
+        }
+
+        return false;
+    }
+
+    private static bool IsLastStatementOfSwitchCase(ICodeBlock item)
+    {
+        if (item.Parent is not ICodeBlock parent)
+            return false;
+
+        for (var next = item.Next; next is not null; next = next.Next)
+        {
+            if (next.Type == CodeBlockType.Label)
+                return true;
+
+            if (next.Type is not CodeBlockType.Block
+                and not CodeBlockType.Comment
+                and not CodeBlockType.LComment
+                and not CodeBlockType.FLComment)
+                return false;
+        }
+
+        return true;
     }
 
 }

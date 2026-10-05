@@ -179,15 +179,19 @@ public class CSCodeBuilder : CodeBuilder
                 Name = $"{tokenData.type}",
                 Type = tokenData.type,
                 Code = tokenData.Code,
-                Parent = data.actualBlock.Parent ?? data.actualBlock
+                Parent = data.actualBlock.Parent ?? data.actualBlock,
+                SourcePos = tokenData.Pos
             };
         }
         else
-            data.actualBlock.Code += ((data.actualBlock.Code.EndsWith("\"") && tokenData.Code.StartsWith("+"))
+        {
+            var needsSeparator = data.actualBlock.Code.EndsWith("\"") && tokenData.Code.StartsWith("+")
                 || tokenData.Code.StartsWith("(")
                 || (CharSets.lettersAndNumbers.Contains(tokenData.Code[0])
                     && !string.IsNullOrEmpty(data.actualBlock.Code)
-                    && !data.actualBlock.Code.EndsWith(" ")) ? " " : "") + tokenData.Code;
+                    && !data.actualBlock.Code.EndsWith(" "));
+            data.actualBlock.Code += (needsSeparator ? " " : "") + tokenData.Code;
+        }
         data.xBreak = tokenData.Code.Contains("break;");
     }
 

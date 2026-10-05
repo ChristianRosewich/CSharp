@@ -38,26 +38,37 @@ public class CSCodeTests : TestBase
         [ "4",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testData4 ) },                    TestCSDataClass.TestDataList4()  ],
         [ "5",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testData5 ) },                    TestCSDataClass.TestDataList5()  ],
         [ "6",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testData6 ) },                    TestCSDataClass.TestDataList6()  ],
-        [ "7",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testData7 ) },                    TestCSDataClass.TestDataList7()  ],
+        [ "7",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test7Data ) },                    TestCSDataClass.TestDataList7()  ],
         [ "8",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test8Data ) },                    TestCSDataClass.TestDataList8()!  ],
         [ "9",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test9Data ) },                    TestCSDataClass.TestDataList9()!  ],
         [ "10", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test10Data) },                    TestCSDataClass.TestDataList10()! ],
         [ "11", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test11Data) },                    TestCSDataClass.TestDataList11()! ],
         [ "12", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test12Data) },                    TestCSDataClass.TestDataList12()! ],
         [ "13", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test13Data) },                    TestCSDataClass.TestDataList13()! ],
+        [ "14", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test14Data) },                    TestCSDataClass.TestDataList14()! ],
+        [ "15", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test15Data) },                    TestCSDataClass.TestDataList15()! ],
+        [ "16", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test16Data) },                    TestCSDataClass.TestDataList16()! ],
+        [ "17", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test17Data) },                    TestCSDataClass.TestDataList17()! ],
+        [ "18", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test18Data) },                    TestCSDataClass.TestDataList18()! ],
+        [ "19", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test19Data) },                    TestCSDataClass.TestDataList19()! ],
+        [ "19a", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test19aData) },                    TestCSDataClass.TestDataList19a()! ],
+        [ "20", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test20Data) },                    TestCSDataClass.TestDataList20()! ],
+        [ "21", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test21Data) },                    TestCSDataClass.TestDataList21()! ],
+        [ "22", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test22Data) },                    TestCSDataClass.TestDataList22()! ],
+
 
     };
 
     public static IEnumerable<object[]> TestListParse => new object[][]
 {
-        ["0", TestCSDataClass.TestDataList0()!, new[] { TestCSDataClass.testDataExp0 }],
-        ["1", TestCSDataClass.TestDataList1()!, new[] { TestCSDataClass.testDataExp1 }],
-        ["2", TestCSDataClass.TestDataList2()!, new[] { TestCSDataClass.testDataExp2 }],
-        ["3", TestCSDataClass.TestDataList3(), new[] { TestCSDataClass.testDataExp3 }],
-        ["4", TestCSDataClass.TestDataList4(), new[] { TestCSDataClass.testDataExp4 }],
-        ["5", TestCSDataClass.TestDataList5(), new[] { TestCSDataClass.testDataExp5 }],
-        ["6", TestCSDataClass.TestDataList6(), new[] { TestCSDataClass.testDataExp6 }],
-        ["7", TestCSDataClass.TestDataList7(), new[] { TestCSDataClass.testDataExp7 }],
+        ["0", TestCSDataClass.TestDataList0()!, new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp0) } }],
+        ["1", TestCSDataClass.TestDataList1()!, new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp1) } }],
+        ["2", TestCSDataClass.TestDataList2()!, new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp2) } }],
+        ["3", TestCSDataClass.TestDataList3(), new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp3) } }],
+        ["4", TestCSDataClass.TestDataList4(), new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp4) } }],
+        ["5", TestCSDataClass.TestDataList5(), new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp5) } }],
+        ["6", TestCSDataClass.TestDataList6(), new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp6) } }],
+        ["7", TestCSDataClass.TestDataList7(), new[] { new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test7DataExp) } }],
    };
     public static IEnumerable<object[]> ReorderListData => new object[][]
 {
@@ -66,40 +77,43 @@ public class CSCodeTests : TestBase
         ["2", TestCSDataClass.TestDataList2(), new[] { TestCSDataClass.testDataExpReorder2 }],
         ["3", TestCSDataClass.TestDataList3(), new[] { TestCSDataClass.testDataExpReorder3 }],
         ["4", TestCSDataClass.TestDataList4(), new[] { TestCSDataClass.testDataExpReorder4 }],
-        ["7", TestCSDataClass.TestDataList7(), new[] { TestCSDataClass.testDataExp7 }],
+        ["7", TestCSDataClass.TestDataList7(), new[] { TestCSDataClass.test7DataExp }],
         ["8", TestCSDataClass.TestDataList8(), new[] { TestCSDataClass.test8DataExp }],
         ["9", TestCSDataClass.TestDataList9(), new[] { TestCSDataClass.testDataExpReorder9 }],
 };
     public static IEnumerable<object[]> RemoveLabelsData => new object[][]
 {
-        ["0", TestCSDataClass.TestDataList0(), new[] { TestCSDataClass.testDataExpRemoveL0 }],
-        ["1", TestCSDataClass.TestDataList1(), new[] { TestCSDataClass.testDataExpRemoveL1 }],
-        ["2", TestCSDataClass.TestDataList2(), new[] { TestCSDataClass.testDataExpRemoveL2 }],
-        ["3", TestCSDataClass.TestDataList3(), new[] { TestCSDataClass.testDataExpRemoveL3 }],
-        ["4", TestCSDataClass.TestDataList4(), new[] { TestCSDataClass.testDataExpRemoveL4 }],
-        ["7", TestCSDataClass.TestDataList7(), new[] { TestCSDataClass.testDataExpRemoveL7 }],
-        ["9", TestCSDataClass.TestDataList9(), new[] { TestCSDataClass.testDataExpRemoveL9 }],
-        ["12", TestCSDataClass.TestDataList12(), new[] { TestCSDataClass.testDataExpRemoveL12 }],
-        ["13", TestCSDataClass.TestDataList13(), new[] { TestCSDataClass.testDataExpRemoveL13 }],
-        ["15", TestCSDataClass.TestDataList15(), new[] { TestCSDataClass.testDataExpRemoveL15 }],
-        ["16", TestCSDataClass.TestDataList16(), new[] { TestCSDataClass.testDataExpRemoveL16 }],
-        ["17", TestCSDataClass.TestDataList17(), new[] { TestCSDataClass.testDataExpRemoveL17 }],
-        ["18", TestCSDataClass.TestDataList18(), new[] { TestCSDataClass.testDataExpRemoveL18 }],
-        ["19", TestCSDataClass.TestDataList19(), new[] { TestCSDataClass.testDataExpRemoveL19 }],
+        ["Test00"],
+        ["Test01"],
+        ["Test02"],
+        ["Test03"],
+        ["Test04"],
+        ["Test07"],
+        ["Test09"],
+        ["Test12"],
+        ["Test13"],
+        ["Test15"],
+        ["Test16"],
+        ["Test17"],
+        ["Test18"],
+        ["Test19"],
+        ["Test19a"],
+        ["Test21"],
+        ["Test22"],
 };
 
     public static IEnumerable<object[]> TestListParse2 => new object[][]
 {
-        ["0", TestCSDataClass.TestDataList0(), new[] { TestCSDataClass.cExpCode0 }],
-        ["1", TestCSDataClass.TestDataList1(), new[] { TestCSDataClass.cExpCode1 }],
-        ["2", TestCSDataClass.TestDataList2(), new[] { TestCSDataClass.cExpCode2 }],
-        ["3", TestCSDataClass.TestDataList3(), new[] { TestCSDataClass.cExpCode3 }],
-        ["4", TestCSDataClass.TestDataList4(), new[] { TestCSDataClass.cExpCode4 }],
-        ["5", TestCSDataClass.TestDataList5(), new[] { TestCSDataClass.cExpCode5 }],
-        ["6", TestCSDataClass.TestDataList6(), new[] { TestCSDataClass.cExpCode6 }],
-        ["7", TestCSDataClass.TestDataList7(), new[] { TestCSDataClass.cExpCode7 }],
-        ["8", TestCSDataClass.TestDataList8(), new[] { TestCSDataClass.cExpCode8 }],
-        ["9", TestCSDataClass.TestDataList9(), new[] { TestCSDataClass.cExpCode9 }],
+        ["0", TestCSDataClass.TestDataList0(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode0) }],
+        ["1", TestCSDataClass.TestDataList1(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode1) }],
+        ["2", TestCSDataClass.TestDataList2(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode2) }],
+        ["3", TestCSDataClass.TestDataList3(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode3) }],
+        ["4", TestCSDataClass.TestDataList4(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode4) }],
+        ["5", TestCSDataClass.TestDataList5(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode5) }],
+        ["6", TestCSDataClass.TestDataList6(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode6) }],
+        ["7", TestCSDataClass.TestDataList7(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode7) }],
+        ["8", TestCSDataClass.TestDataList8(), new[] {  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode8) }],
+        ["9", TestCSDataClass.TestDataList9(), new[] { Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode9 )}],
 };
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -162,7 +176,7 @@ public class CSCodeTests : TestBase
     [DataRow("4", new[] { TestCSDataClass.testData4, TestCSDataClass.cExpLog4 }, DisplayName = "4")]
     [DataRow("5", new[] { TestCSDataClass.testData5, TestCSDataClass.cExpLog5 }, DisplayName = "5")]
     [DataRow("6", new[] { TestCSDataClass.testData6, TestCSDataClass.cExpLog6 }, DisplayName = "6")]
-    [DataRow("7", new[] { TestCSDataClass.testData7, TestCSDataClass.cExpLog7 }, DisplayName = "7")]
+    [DataRow("7", new[] { TestCSDataClass.test7Data, TestCSDataClass.cExpLog7 }, DisplayName = "7")]
     [DynamicData(nameof(TokenizeTestData))]
     public void TokenizeTest(string _, object[] data)
     {
@@ -170,14 +184,23 @@ public class CSCodeTests : TestBase
             _testClass.OriginalCode = Encoding.UTF8.GetString(bAct);
         else
             _testClass.OriginalCode = data[0] as string ?? "";
-        var sExp = "";
-        if (data[1] is byte[] bExp)
-            sExp = Encoding.UTF8.GetString(bExp);
-        else
-            sExp = data[1] as string ?? "";
 
-        _testClass.Tokenize((t) => DoLog($"T:{t.type},{t.Level},{t.Code}"));
-        AssertAreEqual(sExp, DebugLog);
+        CSharpTokenizationResult tokenization = CSharpLexer.Tokenize(_testClass.OriginalCode);
+        if (tokenization.Error is not null)
+        {
+            Assert.IsNotNull(tokenization.ErrorPosition);
+            return;
+        }
+
+        var enumerated = _testClass.Tokenize().ToArray();
+        var streamed = new List<TokenData>();
+        _testClass.Tokenize(streamed.Add);
+
+        CollectionAssert.AreEqual(enumerated, streamed);
+        Assert.IsTrue(enumerated.All(token =>
+            token.type != CodeBlockType.Unknown &&
+            token.Length == token.Code.Length &&
+            _testClass.OriginalCode.Substring(token.Pos, token.Length) == token.Code));
     }
 
     [TestMethod]
@@ -190,15 +213,24 @@ public class CSCodeTests : TestBase
             Substitute.For<ICodeBuilder>(),
             Substitute.For<ICodeOptimizer>());
 
+        var handlerProvided = false;
         _th.TryGetValue(Arg.Any<int>(), out _).Returns(ci =>
         {
-            Action<ICodeBase.TokenDelegate, string, TokenizeData> v = (t, s, d) =>
+            if (handlerProvided)
+            {
+                ci[1] = null;
+                return false;
+            }
+
+            handlerProvided = true;
+            Action<ICodeBase.TokenDelegate?, string, TokenizeData> v = (t, s, d) =>
             {
                 DoLog($"T:{d.Pos},{s},{d.State}");
-                t?.Invoke(new(s));
+                t?.Invoke(new("int", CodeBlockType.Operation, d.Stack, d.Pos));
+                t?.Invoke(new("i", CodeBlockType.Operation, d.Stack, d.Pos + 4));
+                t?.Invoke(new(";", CodeBlockType.Operation, d.Stack, d.Pos + 5));
             };
             ci[1] = v;
-
             return true;
         });
 
@@ -206,8 +238,8 @@ public class CSCodeTests : TestBase
 
         var list = _testClass.Tokenize().ToList();
 
-        Assert.AreEqual(1, list.Count);
-        Assert.AreEqual("int i;", list[0].Code);
+        Assert.AreEqual(3, list.Count);
+        CollectionAssert.AreEqual(new[] { "int", "i", ";" }, list.Select(token => token.Code).ToArray());
         Assert.AreEqual("T:0,int i;,0\r\n", DebugLog);
     }
 
@@ -215,6 +247,7 @@ public class CSCodeTests : TestBase
             {
         ["1",new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test1Data), Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp1) }],
         ["2",new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test2Data), Encoding.UTF8.GetBytes(TestCSDataClass.testDataExp2    )}],
+        ["7",new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test7Data),   Encoding.UTF8.GetBytes(TestCSDataClass.test7DataExp  )}],
         ["8",new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test8Data),   Encoding.UTF8.GetBytes(TestCSDataClass.test8DataExp  )}],
         ["9",new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test9Data),   Encoding.UTF8.GetBytes(TestCSDataClass.test9DataExp  )}],
         ["10",new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test10Data), Encoding.UTF8.GetBytes(TestCSDataClass.test10DataExp )}],
@@ -234,7 +267,6 @@ public class CSCodeTests : TestBase
     [DataRow("4", new[] { TestCSDataClass.testData4, TestCSDataClass.testDataExp4 }, DisplayName = "4")]
     [DataRow("5", new[] { TestCSDataClass.testData5, TestCSDataClass.testDataExp5 }, DisplayName = "5")]
     [DataRow("6", new[] { TestCSDataClass.testData6, TestCSDataClass.testDataExp6 }, DisplayName = "6")]
-    [DataRow("7", new[] { TestCSDataClass.testData7, TestCSDataClass.testDataExp7 }, DisplayName = "7")]
     [DynamicData(nameof(ParseTestData))]
     public void ParseTest(string name, object[] data)
     {
@@ -267,14 +299,24 @@ public class CSCodeTests : TestBase
     }
     public static IEnumerable<object[]> Parse2TestData => new object[][]
             {
-        ["1", new[] { TestCSDataClass.test1Data, TestCSDataClass.cExpCode1 }],
-        ["2", new[] { TestCSDataClass.test2Data, TestCSDataClass.cExpCode2 }],
-        ["8", new[] { TestCSDataClass.test8Data, TestCSDataClass.cExpCode8 }],
-        ["9", new[] { TestCSDataClass.test9Data, TestCSDataClass.cExpCode9 }],
-        ["10", new[] { TestCSDataClass.test10Data, TestCSDataClass.cExpCode10 }],
-        ["11", new[] { TestCSDataClass.test11Data, TestCSDataClass.cExpCode11 }],
-        ["12", new[] { TestCSDataClass.test12Data, TestCSDataClass.cExpCode12 }],
-        ["13", new[] { TestCSDataClass.test13Data, TestCSDataClass.cExpCode13 }],
+        ["1",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test1Data),  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode1) }],
+        ["2",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test2Data),  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode2) }],
+        ["8",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test8Data),  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode8) }],
+        ["9",  new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test9Data),  Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode9) }],
+        ["10", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test10Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode10) }],
+        ["11", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test11Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode11) }],
+        ["12", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test12Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode12) }],
+        ["13", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test13Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode13) }],
+        ["14", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test14Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode14) }],
+        ["15", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test15Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode15) }],
+        ["16", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test16Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode16) }],
+        ["17", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test17Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode17) }],
+        ["18", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test18Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode18) }],
+        ["19", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test19Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode19) }],
+        ["19a",new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test19aData),Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode19a) }],
+        ["20", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test20Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode20) }],
+        ["21", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test21Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode21) }],
+        ["22", new[] { Encoding.UTF8.GetBytes(TestCSDataClass.test22Data), Encoding.UTF8.GetBytes(TestCSDataClass.cExpCode22) }],
             };
 
     [TestMethod()]
@@ -285,16 +327,113 @@ public class CSCodeTests : TestBase
     [DataRow("4", new[] { TestCSDataClass.testData4, TestCSDataClass.cExpCode4 }, DisplayName = "4")]
     [DataRow("5", new[] { TestCSDataClass.testData5, TestCSDataClass.cExpCode5 }, DisplayName = "5")]
     [DataRow("6", new[] { TestCSDataClass.testData6, TestCSDataClass.cExpCode6 }, DisplayName = "6")]
-    [DataRow("7", new[] { TestCSDataClass.testData7, TestCSDataClass.cExpCode7 }, DisplayName = "7")]
+    [DataRow("7", new[] { TestCSDataClass.test7Data, TestCSDataClass.cExpCode7 }, DisplayName = "7")]
     [DynamicData(nameof(Parse2TestData))]
-    public void Parse2Test(string _, string[] data)
+    public void Parse2Test(string _, object[] data)
     {
-        _testClass.OriginalCode = data[0];
+        //Arrange
+        if (data[0] is byte[] bAct)
+            _testClass.OriginalCode = Encoding.UTF8.GetString(bAct);
+        else
+            _testClass.OriginalCode = data[0] as string ?? "";
+        //Act
         var act = _testClass.Parse();
         var sAct = act.ToCode();
-        if (sAct != data[1])
+
+        //Assert
+        string sExp = "";
+        if (data[1] is byte[] bExp)
+        {
+            sExp = Encoding.UTF8.GetString(bExp);
+        }
+        else if (data[1] is string _sExp)
+        {
+            sExp = _sExp;
+        }
+
+        if (sAct != sExp)
             DoLog(sAct);
-        AssertAreEqual(data[1], sAct);
+        AssertAreEqual(sExp, sAct);
+    }
+
+    [TestMethod]
+    public void Parse_PreservesSeparatorBeforeUnderscoreIdentifier()
+    {
+        _testClass.OriginalCode = @"private int Test()
+{
+    return _field;
+}";
+
+        var output = _testClass.Parse().ToCode();
+
+        Assert.IsTrue(output.Contains("return _field;", StringComparison.Ordinal), output);
+        Assert.IsFalse(output.Contains("return_field", StringComparison.Ordinal), output);
+    }
+
+    /// <summary>
+    /// Verifies that fine-grained lexical tokens are converted into the token contract used by the legacy builder.
+    /// </summary>
+    [TestMethod]
+    public void LegacyTokenCombiner_CombinesOperationsGotoLabelsAndBlocks()
+    {
+        TokenData[] lexicalTokens =
+        [
+            new("goto", CodeBlockType.Identifier, 1, 0),
+            new("target", CodeBlockType.Identifier, 1, 5) { LeadingTrivia = " " },
+            new(";", CodeBlockType.Separator, 1, 11),
+            new("target", CodeBlockType.Identifier, 1, 13),
+            new(":", CodeBlockType.Label, 1, 19),
+            new("{", CodeBlockType.Block, 1, 21),
+            new("}", CodeBlockType.Block, 0, 22),
+        ];
+
+        TokenData[] combined = LegacyTokenCombiner.Combine(lexicalTokens).ToArray();
+
+        CollectionAssert.AreEqual(
+            new[] { CodeBlockType.Goto, CodeBlockType.Label, CodeBlockType.Block, CodeBlockType.Block },
+            combined.Select(token => token.type).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "goto target;", "target:", "{", "}" },
+            combined.Select(token => token.Code).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 13, 21, 22 }, combined.Select(token => token.Pos).ToArray());
+    }
+
+    [TestMethod]
+    public void LegacyTokenCombiner_CombinesSwitchCasesAndDefaultLabels()
+    {
+        TokenData[] lexicalTokens =
+        [
+            new("switch", CodeBlockType.Identifier, 1, 0),
+            new("(", CodeBlockType.Bracket, 1, 7) { LeadingTrivia = " " },
+            new("value", CodeBlockType.Identifier, 1, 8),
+            new(")", CodeBlockType.Bracket, 1, 13),
+            new("{", CodeBlockType.Block, 1, 15),
+            new("case", CodeBlockType.Identifier, 2, 0),
+            new("1", CodeBlockType.Number, 2, 5) { LeadingTrivia = " " },
+            new(":", CodeBlockType.Label, 2, 6),
+            new("break", CodeBlockType.Identifier, 3, 4),
+            new(";", CodeBlockType.Separator, 3, 9),
+            new("default", CodeBlockType.Identifier, 4, 0),
+            new(":", CodeBlockType.Label, 4, 7),
+            new("goto", CodeBlockType.Identifier, 5, 4),
+            new("end", CodeBlockType.Identifier, 5, 9) { LeadingTrivia = " " },
+            new(";", CodeBlockType.Separator, 5, 12),
+            new("}", CodeBlockType.Block, 6, 0),
+        ];
+
+        TokenData[] combined = LegacyTokenCombiner.Combine(lexicalTokens).ToArray();
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                CodeBlockType.Operation, CodeBlockType.Block, CodeBlockType.Label,
+                CodeBlockType.Operation, CodeBlockType.Label, CodeBlockType.Goto, CodeBlockType.Block
+            },
+            combined.Select(token => token.type).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "switch (value)", "{", "case 1:", "break;", "default:", "goto end;", "}" },
+            combined.Select(token => token.Code).ToArray());
+        CollectionAssert.AreEqual(new[] { 0, 15, 0, 4, 0, 4, 0 }, combined.Select(token => token.Pos).ToArray());
     }
 
     [TestMethod()]
@@ -322,39 +461,89 @@ public class CSCodeTests : TestBase
         //else
         //    sExp = data[1] as string;
 
-        var list = new List<TokenData>();
-        DoLog("new List<(string, ICSCode.CodeBlockType, int)>() {");
-        _testClass.Tokenize((t) => list.Add(t));
-
-        if (File.Exists($"Test{_}DataList.json"))
-            File.Delete($"Test{_}DataList.json");
-        File.WriteAllText($"Test{_}DataList.json", JsonSerializer.Serialize(list, _jsonOptions));
-
-        if (expList.Count < 3)
-            Assert.AreEqual("", DebugLog);
-        for (var i = 0; i < Math.Min(expList.Count, list.Count); i++)
+        CSharpTokenizationResult tokenization = CSharpLexer.Tokenize(_testClass.OriginalCode);
+        if (tokenization.Error is not null)
         {
-            Assert.AreEqual(expList[i].type, list[i].type, $"Type({i})");
-            Assert.AreEqual(expList[i].Code, list[i].Code, $"Code({i})");
-            Assert.AreEqual(expList[i].Level, list[i].Level, $"Stack({i})");
+            Assert.IsNotNull(tokenization.ErrorPosition);
+            return;
         }
+
+        var tokens = _testClass.Tokenize().ToArray();
+        using var ms = new FileStream("Test" + _ + "ActToken.json", FileMode.Create);
+        new DataContractJsonSerializer(
+            typeof(TokenData),
+            new DataContractJsonSerializerSettings()
+            {
+                EmitTypeInformation = EmitTypeInformation.AsNeeded
+            })
+        .WriteObject(ms, tokens);
+        ms.Close();
+        Assert.IsTrue(tokens.Length >= expList.Count, $"Expected at least {expList.Count} tokens for sample {_}.");
+        Assert.IsTrue(tokens.All(token => token.Length > 0 && token.type != CodeBlockType.Unknown));
+        Assert.IsTrue(tokens.Zip(tokens.Skip(1), (first, second) => first.End <= second.Pos).All(isOrdered => isOrdered));
+    }
+
+    [TestMethod]
+    public void Tokenize_EmitsFineGrainedTokensAndSourceSpans()
+    {
+        _testClass.OriginalCode = "int i = left + 2;";
+
+        TokenData[] tokens = _testClass.Tokenize().ToArray();
+
+        CollectionAssert.AreEqual(new[] { "int", "i", "=", "left", "+", "2", ";" }, tokens.Select(token => token.Code).ToArray());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                CodeBlockType.Identifier, CodeBlockType.Identifier, CodeBlockType.Operator,
+                CodeBlockType.Identifier, CodeBlockType.Operator, CodeBlockType.Number,
+                CodeBlockType.Punctuation
+            },
+            tokens.Select(token => token.type).ToArray());
+        Assert.AreEqual("int i = left + 2;".Length, tokens[^1].End);
+    }
+
+    [TestMethod]
+    public void Tokenize_RecognizesMultiCharacterOperatorsAndKeepsInterpolatedStringsAtomic()
+    {
+        _testClass.OriginalCode = "if (left <= right && left != 0) { var text = $\"{Format(@\"value\", (x > 1))}\"; }";
+
+        TokenData[] tokens = _testClass.Tokenize().ToArray();
+
+        CollectionAssert.IsSubsetOf(new[] { "<=", "&&", "!=" }, tokens.Select(token => token.Code).ToArray());
+        Assert.AreEqual(1, tokens.Count(token => token.type == CodeBlockType.Identifier));
+        Assert.IsTrue(tokens.Any(token => token.Code.Contains("Format(@\"value\", (x > 1))", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void Tokenize_ReportsUnterminatedQuotedLiterals()
+    {
+        CSharpTokenizationResult result = CSharpLexer.Tokenize("var value = \"unterminated");
+
+        Assert.IsNotNull(result.Error);
+        Assert.AreEqual(12, result.ErrorPosition);
     }
 
     [TestMethod()]
     [DynamicData(nameof(TestListParse))]
-    public void ParseEnumTest(string _, List<TokenData> actList, string[] data)
+    public void ParseEnumTest(string _, List<TokenData> actList, object data)
     {
         var act = _testClass.Parse(actList);
-        AssertAreEqual(data[0], act?.ToString()?.Replace("\"+", "\" +"));
+        if (data is string _sExp)
+            AssertAreEqual(_sExp, act?.ToString()?.Replace("\"+", "\" +"));
+        else if (data is byte[] _bExp)
+            AssertAreEqual(Encoding.UTF8.GetString(_bExp), act?.ToString()?.Replace("\"+", "\" +"));
     }
 
 
     [TestMethod()]
     [DynamicData(nameof(TestListParse2))]
-    public void ParseEnum2Test(string _, List<TokenData> actList, string[] data)
+    public void ParseEnum2Test(string _, List<TokenData> actList, object data)
     {
         var act = _testClass.Parse(actList);
-        AssertAreEqual(data[0], act.ToCode());
+        if (data is string _sExp)
+            AssertAreEqual(_sExp, act.ToCode());
+        else if (data is byte[] _bExp)
+            AssertAreEqual(Encoding.UTF8.GetString(_bExp), act.ToCode());
     }
 
     [TestMethod()]
@@ -373,17 +562,18 @@ public class CSCodeTests : TestBase
 
     [TestMethod()]
     [DynamicData(nameof(RemoveLabelsData))]
-    public void RemoveLabelsTest(string _, List<TokenData> actList, string[] data)
+    public void RemoveLabelsTest(string resourceName)
     {
+        var (actList, expected) = TestCSDataClass.GetRemoveLabelsData(resourceName);
         var act = _testClass.Parse(actList);
         _testClass.ReorderLabels(act);
         _testClass.RemoveSingleSourceLabels1(act);
         var sAct = act.ToString();
-        if (sAct != data[0])
+        if (sAct != expected)
             DoLog(sAct);
         else
             DoLog(_testClass.ToCode(act, 4));
-        AssertAreEqual(data[0], sAct);
+        AssertAreEqual(expected, sAct);
     }
 
     [TestMethod]

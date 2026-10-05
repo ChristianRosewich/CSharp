@@ -305,14 +305,54 @@ public class CodeBlock : ICodeBlock
     /// <param name="indent">Current indentation level (spaces). First nested blocks increase indentation.</param>
     /// <returns>Formatted code snippet (not necessarily identical to original source).</returns>
     /// <remarks>
-    /// Adds an inline comment annotation for label blocks receiving more than two incoming sources.
+    /// Adds an inline comment annotation for label blocks receiving more than two incoming sources and keeps
+    /// directly adjacent unbraced <c>if</c> chains on one line.
     /// </remarks>
     public virtual string ToCode(int indent = 4)
     {
         string codeComment = string.Empty;
         if (Type is CodeBlockType.Label && Sources.Count > 2)
             codeComment = $" // <========== {Sources.Count}";
-        return $"{new string(' ', Type is CodeBlockType.Block or CodeBlockType.Label ? indent - 4 : indent)}{Code}{codeComment}{(SubBlocks.Count > 0 ? Environment.NewLine : string.Empty)}{string.Join(Environment.NewLine, SubBlocks.Select((c) => c.ToCode(indent + 4)))}";
+
+        var prefix = new string(' ', Type is CodeBlockType.Block or CodeBlockType.Label ? indent - 4 : indent);
+        if (Code == "else"
+            && SubBlocks.Count > 0
+            && SubBlocks[0].Type == CodeBlockType.Operation
+            && (SubBlocks[0].Code.StartsWith("if ")
+                || SubBlocks[0].Code.StartsWith("if(")))
+        {
+            var firstChild = SubBlocks[0].ToCode(indent).TrimStart();
+            var remainingChildren = SubBlocks.Skip(1).Select(c => c.Code == "else" ? c.ToCode(indent) : c.ToCode(indent + 4));
+            return $"{prefix}{Code}{(codeComment)} {firstChild}{(remainingChildren.Any() ? Environment.NewLine + string.Join(Environment.NewLine, remainingChildren) : string.Empty)}";
+        }
+
+        return $"{prefix}{Code}{codeComment}{(SubBlocks.Count > 0 ? Environment.NewLine : string.Empty)}{RenderSubBlocks(indent)}";
+    }
+
+    private string RenderSubBlocks(int indent)
+    {
+        var rendered = new List<string>();
+        ICodeBlock? previous = null;
+        foreach (var child in SubBlocks)
+        {
+            string childCode = child.ToCode(indent + 4);
+            if (previous is not null
+                && previous.Type == CodeBlockType.Operation
+                && child.Type == CodeBlockType.Operation
+                && previous.SubBlocks.Count == 0
+                && (previous.Code.StartsWith("if ") || previous.Code.StartsWith("if("))
+                && (child.Code.StartsWith("if ") || child.Code.StartsWith("if(")))
+            {
+                rendered[rendered.Count - 1] += " " + childCode.TrimStart();
+            }
+            else
+            {
+                rendered.Add(childCode);
+            }
+            previous = child;
+        }
+
+        return string.Join(Environment.NewLine, rendered);
     }
 
     /// <summary>

@@ -15,5 +15,12 @@
         /// </summary>
         /// <param name="item">The code block candidate to test and optimize.</param>
         void TestItem(ICodeBlock item);
+
+        /// <summary>
+        /// Simplifies deterministic conditional chains in the supplied code tree.
+        /// </summary>
+        /// <param name="root">The root block whose conditional statements are inspected.</param>
+        void OptimizeIfChains(ICodeBlock root);
+
     }
 }
